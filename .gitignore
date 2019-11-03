@@ -1,0 +1,4 @@
+.obj/
+qjsc
+repl.c
+qjs-debug
