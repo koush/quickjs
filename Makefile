@@ -156,6 +156,12 @@ endif
 all: $(OBJDIR) $(OBJDIR)/quickjs.check.o $(OBJDIR)/qjs.check.o $(PROGS)
 
 QJS_LIB_OBJS=$(OBJDIR)/quickjs.o $(OBJDIR)/libregexp.o $(OBJDIR)/libunicode.o $(OBJDIR)/cutils.o $(OBJDIR)/quickjs-libc.o
+QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger.o
+ifndef CONFIG_WIN32
+QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger-transport-unix.o
+else
+QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger-transport-win.o
+endif
 
 QJSBN_LIB_OBJS=$(patsubst %.o, %.bn.o, $(QJS_LIB_OBJS)) $(OBJDIR)/libbf.bn.o
 

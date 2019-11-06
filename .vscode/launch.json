@@ -5,17 +5,32 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "(lldb) Attach",
+            "type": "cppdbg",
+            "request": "attach",
+            "program": "${workspaceFolder}/qjs-debug",
+            "processId": "${command:pickProcess}",
+            "MIMode": "lldb"
+        },
+        {
             "name": "(lldb) Launch",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/qjs-debug",
-            "args": [],
+            "args": [
+                "/Volumes/Dev/quickjs/test.js"
+            ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
-            "environment": [],
+            "environment": [
+                {
+                    "name": "QUICKJS_DEBUG_ADDRESS",
+                    "value": "localhost:5555"
+                }
+            ],
             "externalConsole": true,
             "MIMode": "lldb",
-            "preLaunchTask": "make qjs-debug"
+            "preLaunchTask": "make qjs-debug",
         }
     ]
 }
