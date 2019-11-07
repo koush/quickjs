@@ -19,23 +19,23 @@ static size_t js_transport_read(void *udata, char *buffer, size_t length) {
     if (data->handle <= 0)
         return -1;
 
-	if (length == 0)
+    if (length == 0)
         return -2;
 
-	if (buffer == NULL)
+    if (buffer == NULL)
         return -3;
 
-	ssize_t ret = read(data->handle, (void *)buffer, length);
-	if (ret < 0)
+    ssize_t ret = read(data->handle, (void *)buffer, length);
+    if (ret < 0)
         return -4;
-	
+
     if (ret == 0)
         return -5;
 
     if (ret > length)
         return -6;
 
-	return ret;
+    return ret;
 }
 
 static size_t js_transport_write(void *udata, const char *buffer, size_t length) {
@@ -43,39 +43,39 @@ static size_t js_transport_write(void *udata, const char *buffer, size_t length)
     if (data->handle <= 0)
         return -1;
 
-	if (length == 0)
+    if (length == 0)
         return -2;
 
-	if (buffer == NULL)
+    if (buffer == NULL)
         return -3;
 
-	size_t ret = write(data->handle, (const void *) buffer, length);
-	if (ret <= 0 || ret > (ssize_t) length)
+    size_t ret = write(data->handle, (const void *) buffer, length);
+    if (ret <= 0 || ret > (ssize_t) length)
         return -4;
 
     return ret;
 }
 
 static size_t js_transport_peek(void *udata) {
-	struct pollfd fds[1];
-	int poll_rc;
+    struct pollfd fds[1];
+    int poll_rc;
 
     struct js_transport_data* data = (struct js_transport_data *)udata;
     if (data->handle <= 0)
         return -1;
 
-	fds[0].fd = data->handle;
-	fds[0].events = POLLIN;
-	fds[0].revents = 0;
+    fds[0].fd = data->handle;
+    fds[0].events = POLLIN;
+    fds[0].revents = 0;
 
-	poll_rc = poll(fds, 1, 0);
-	if (poll_rc < 0)
+    poll_rc = poll(fds, 1, 0);
+    if (poll_rc < 0)
         return -2;
     if (poll_rc > 1)
         return -3;
     // no data
     if (poll_rc == 0)
-		return 0;
+        return 0;
     // has data
     return 1;
 }
