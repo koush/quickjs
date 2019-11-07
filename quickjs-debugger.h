@@ -61,7 +61,7 @@ void js_debugger_connect(JSContext *ctx, char *address);
 JSValue js_debugger_file_breakpoints(JSContext *ctx, const char *path);
 
 // begin internal api functions
-// these functions all require access to quickj internal structures.
+// these functions all require access to quickjs internal structures.
 
 JSDebuggerInfo *js_debugger_info(JSContext *ctx);
 JSDebuggerLocation js_debugger_current_location(JSContext *ctx);

@@ -50512,7 +50512,7 @@ done:
     return b->debugger.breakpoints[pc];
 }
 
-void js_debugger_enumerate_global_variables(JSContext *ctx, JSValue ret, JSValue global_obj) {
+static void js_debugger_enumerate_global_variables(JSContext *ctx, JSValue ret, JSValue global_obj) {
     JSValue globals = globals =
         JS_GetOwnPropertyNames2(ctx, global_obj, JS_GPN_STRING_MASK, JS_ITERATOR_KIND_KEY_AND_VALUE);
     uint32_t globals_len = 0;
