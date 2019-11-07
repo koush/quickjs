@@ -18,14 +18,14 @@
             "request": "launch",
             "program": "${workspaceFolder}/qjs-debug",
             "args": [
-                "/Volumes/Dev/test/vscode-quickjs-debug/src/tests/data/test.js"
+                "test.js"
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [
                 {
                     "name": "QUICKJS_DEBUG_ADDRESS",
-                    "value": "localhost:5555"
+                    "value": "192.168.2.7:5555"
                 }
             ],
             "externalConsole": true,
