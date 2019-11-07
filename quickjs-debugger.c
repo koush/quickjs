@@ -331,6 +331,9 @@ static int js_process_debugger_messages(JSDebuggerInfo *info) {
     int ret = 0;
 
     while (!done_processing) {
+        fflush(stdout);
+        fflush(stderr);
+
         int message_length;
         if (!js_transport_read_fully(info, (char *)&message_length, sizeof(message_length)))
             goto done;
