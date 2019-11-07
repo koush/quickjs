@@ -364,6 +364,12 @@ static int js_process_debugger_messages(JSDebuggerInfo *info) {
         else if (strcmp("breakpoints", type) == 0) {
             js_process_breakpoints(info, JS_GetPropertyStr(ctx, message, "breakpoints"));
         }
+        else if (strcmp("stopOnException", type) == 0) {
+            JSValue stop = JS_GetPropertyStr(ctx, message, "stopOnException");
+            info->exception_breakpoint = JS_ToBool(ctx, stop);
+            JS_FreeValue(ctx, stop);
+        }
+
         JS_FreeCString(ctx, type);
         JS_FreeValue(ctx, message);
     }
@@ -386,9 +392,18 @@ static void js_send_stopped_event(JSDebuggerInfo *info, const char *reason) {
     js_transport_send_event(info, event);
 }
 
+void js_debugger_exception(JSContext *ctx) {
+    JSDebuggerInfo *info = js_debugger_info(ctx);
+    if (!info->exception_breakpoint)
+        return;
+    js_send_stopped_event(info, "exception");
+    js_process_debugger_messages(info);
+}
+
 // in thread check request/response of pending commands.
 // todo: background thread that reads the socket.
-void js_debugger_check(JSContext* ctx, JSDebuggerInfo *info) {
+void js_debugger_check(JSContext* ctx) {
+    JSDebuggerInfo *info = js_debugger_info(ctx);
     if (info->is_debugging)
         return;
     info->is_debugging = 1;

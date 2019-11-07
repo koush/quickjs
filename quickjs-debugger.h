@@ -37,13 +37,15 @@ typedef struct JSDebuggerInfo {
     void *transport_udata;
 
     JSValue breakpoints;
+    int exception_breakpoint;
     uint32_t breakpoints_dirty_counter;
     int stepping;
     JSDebuggerLocation step_over;
     int step_depth;
 } JSDebuggerInfo;
 
-void js_debugger_check(JSContext *ctx, JSDebuggerInfo *info);
+void js_debugger_check(JSContext *ctx);
+void js_debugger_exception(JSContext* ctx);
 void js_debugger_free(JSContext *ctx, JSDebuggerInfo *info);
 
 void js_debugger_attach(

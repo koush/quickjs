@@ -5894,6 +5894,7 @@ JSValue JS_Throw(JSContext *ctx, JSValue obj)
     JS_FreeValue(ctx, ctx->current_exception);
     ctx->current_exception = obj;
     ctx->exception_needs_backtrace = JS_IsError(ctx, obj);
+    js_debugger_exception(ctx);
     return JS_EXCEPTION;
 }
 
@@ -14835,7 +14836,7 @@ static JSValue JS_CallInternal(JSContext *ctx, JSValueConst func_obj,
 #define BREAK           SWITCH(pc)
 #endif
 
-    js_debugger_check(ctx, &ctx->debugger_info);
+    js_debugger_check(ctx);
     if (js_poll_interrupts(ctx))
         return JS_EXCEPTION;
     if (unlikely(JS_VALUE_GET_TAG(func_obj) != JS_TAG_OBJECT)) {
@@ -50538,6 +50539,10 @@ JSValue js_debugger_global_variables(JSContext *ctx) {
 JSValue js_debugger_local_variables(JSContext *ctx, int stack_index) {
     JSValue ret = JS_NewObject(ctx);
 
+    // put exceptions on the top stack frame
+    if (stack_index == 0 && !JS_IsException(ctx->current_exception))
+        JS_SetPropertyStr(ctx, ret, "<exception>", JS_DupValue(ctx, ctx->current_exception));
+
     JSStackFrame *sf;
     int cur_index = 0;
 
@@ -50571,8 +50576,6 @@ JSValue js_debugger_local_variables(JSContext *ctx, int stack_index) {
                 var_val = sf->arg_buf[i];
             else
                 var_val = sf->var_buf[i - b->arg_count];
-            if (JS_IsFunction(ctx, var_val))
-                continue;
 
             JSVarDef *vd = b->vardefs + i;
             JS_SetProperty(ctx, ret, vd->var_name, JS_DupValue(ctx, var_val));
