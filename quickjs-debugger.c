@@ -49,11 +49,19 @@ static int js_transport_write_fully(JSDebuggerInfo *info, const char *buffer, si
     return 1;
 }
 
-static int js_transport_write_message(JSDebuggerInfo *info, const char* value, size_t len) {
-    int message_length = htonl(len);
-    if (!js_transport_write_fully(info, (const char *)&message_length, sizeof(message_length)))
+static int js_transport_write_message_newline(JSDebuggerInfo *info, const char* value, size_t len) {
+    // length prefix is 8 hex followed by newline = 012345678\n
+    // not efficient, but protocol is then human readable.
+    char message_length[10];
+    message_length[9] = '\0';
+    sprintf(message_length, "%08x\n", (int)len + 1);
+    if (!js_transport_write_fully(info, message_length, 9))
         return 0;
-    return js_transport_write_fully(info, value, len);
+    int ret = js_transport_write_fully(info, value, len);
+    if (!ret)
+        return ret;
+    char newline[2] = { '\n', '\0' };
+    return js_transport_write_fully(info, newline, 1);
 }
 
 static int js_transport_write_value(JSDebuggerInfo *info, JSValue value) {
@@ -61,7 +69,8 @@ static int js_transport_write_value(JSDebuggerInfo *info, JSValue value) {
     size_t len;
     const char* str = JS_ToCStringLen(info->ctx, &len, stringified);
     assert(len);
-    int ret = js_transport_write_message(info, str, len);
+    // add a newline for human readability
+    int ret = js_transport_write_message_newline(info, str, len);
     JS_FreeCString(info->ctx, str);
     JS_FreeValue(info->ctx, stringified);
     JS_FreeValue(info->ctx, value);
@@ -329,16 +338,20 @@ static int js_process_debugger_messages(JSDebuggerInfo *info) {
     state.variable_references = JS_NewObject(ctx);
     int done_processing = 0;
     int ret = 0;
+    char message_length_buf[10];
 
     while (!done_processing) {
         fflush(stdout);
         fflush(stderr);
 
-        int message_length;
-        if (!js_transport_read_fully(info, (char *)&message_length, sizeof(message_length)))
+        // length prefix is 8 hex followed by newline = 012345678\n
+		// not efficient, but protocol is then human readable.
+        if (!js_transport_read_fully(info, message_length_buf, 9))
             goto done;
 
-        message_length = ntohl(message_length);
+        message_length_buf[8] = '\0';
+        int message_length = strtol(message_length_buf, NULL, 16);
+        assert(message_length > 0);
         if (message_length > info->message_buffer_length) {
             if (info->message_buffer) {
                 js_free(ctx, info->message_buffer);
