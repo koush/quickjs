@@ -183,6 +183,17 @@ static int js_debugger_get_frame(JSContext *ctx, JSValue args) {
     return frame;
 }
 
+static void js_send_stopped_event(JSDebuggerInfo *info, const char *reason) {
+    JSContext *ctx = info->ctx;
+
+    JSValue event = JS_NewObject(ctx);
+    // better thread id?
+    JS_SetPropertyStr(ctx, event, "type", JS_NewString(ctx, "StoppedEvent"));
+    JS_SetPropertyStr(ctx, event, "reason", JS_NewString(ctx, reason));
+    JS_SetPropertyStr(ctx, event, "thread", JS_NewInt64(ctx, (int64_t)ctx));
+    js_transport_send_event(info, event);
+}
+
 static int js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedState *state, JSValue request) {
     JSContext *ctx = info->ctx;
     JSValue command_property = JS_GetPropertyStr(ctx, request, "command");
@@ -191,6 +202,10 @@ static int js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedStat
     if (strcmp("continue", command) == 0) {
         js_transport_send_response(info, request, JS_UNDEFINED);
         ret = 0;
+    }
+    if (strcmp("pause", command) == 0) {
+        js_transport_send_response(info, request, JS_UNDEFINED);
+        js_send_stopped_event(info, "pause");
     }
     else if (strcmp("next", command) == 0) {
         info->stepping = JS_DEBUGGER_STEP;
@@ -395,17 +410,6 @@ done:
     JS_FreeValue(ctx, state.variable_references);
     JS_FreeValue(ctx, state.variable_pointers);
     return ret;
-}
-
-static void js_send_stopped_event(JSDebuggerInfo *info, const char *reason) {
-    JSContext *ctx = info->ctx;
-
-    JSValue event = JS_NewObject(ctx);
-    // better thread id?
-    JS_SetPropertyStr(ctx, event, "type", JS_NewString(ctx, "StoppedEvent"));
-    JS_SetPropertyStr(ctx, event, "reason", JS_NewString(ctx, reason));
-    JS_SetPropertyStr(ctx, event, "thread", JS_NewInt64(ctx, (int64_t)ctx));
-    js_transport_send_event(info, event);
 }
 
 void js_debugger_exception(JSContext *ctx) {
