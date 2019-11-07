@@ -394,6 +394,8 @@ static void js_send_stopped_event(JSDebuggerInfo *info, const char *reason) {
 
 void js_debugger_exception(JSContext *ctx) {
     JSDebuggerInfo *info = js_debugger_info(ctx);
+    if (info->is_debugging)
+        return;
     if (!info->exception_breakpoint)
         return;
     js_send_stopped_event(info, "exception");

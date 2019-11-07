@@ -50540,7 +50540,7 @@ JSValue js_debugger_local_variables(JSContext *ctx, int stack_index) {
     JSValue ret = JS_NewObject(ctx);
 
     // put exceptions on the top stack frame
-    if (stack_index == 0 && !JS_IsException(ctx->current_exception))
+    if (stack_index == 0 && !JS_IsNull(ctx->current_exception) && !JS_IsUndefined(ctx->current_exception))
         JS_SetPropertyStr(ctx, ret, "<exception>", JS_DupValue(ctx, ctx->current_exception));
 
     JSStackFrame *sf;
