@@ -22,8 +22,6 @@ typedef struct JSDebuggerInfo {
  
     int attempted_connect;
     int peek_ticks;
-    void *transport_udata;
-
     char *message_buffer;
     int message_buffer_length;
     int is_debugging;
@@ -32,10 +30,10 @@ typedef struct JSDebuggerInfo {
     size_t (*transport_write)(void *udata, const char* buffer, size_t length);
     size_t (*transport_peek)(void *udata);
     void (*transport_close)(JSContext *ctx, void *udata);
+    void *transport_udata;
 
     JSValue breakpoints;
     uint32_t breakpoints_dirty_counter;
-
     int stepping;
     JSDebuggerLocation step_over;
 } JSDebuggerInfo;
@@ -64,5 +62,7 @@ JSDebuggerInfo *js_debugger_info(JSContext *ctx);
 JSValue js_debugger_global_variables(JSContext *ctx);
 JSValue js_debugger_local_variables(JSContext *ctx, int stack_index);
 JSValue js_debugger_closure_variables(JSContext *ctx, int stack_index);
+JSValue js_debugger_evaluate(JSContext *ctx, int stack_index, JSValue expression);
+uint32_t js_debugger_stack_depth(JSContext *ctx);
 
 #endif

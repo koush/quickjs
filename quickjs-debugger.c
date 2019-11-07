@@ -5,9 +5,17 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
+
+typedef struct DebuggerSuspendedState {
+    uint32_t variable_reference_count;
+    JSValue variable_references;
+    JSValue variable_pointers;
+} DebuggerSuspendedState;
 
 static char *debug_address = NULL;
 static int need_load_debug_address = 1;
+
 
 static char* js_get_debug_address() {
     if (!need_load_debug_address) {
@@ -109,7 +117,48 @@ static JSValue js_get_scopes(JSContext *ctx, int frame) {
     return scopes;
 }
 
-static int js_process_request(JSDebuggerInfo *info, JSValue request) {
+static JSValue js_debugger_get_variable(JSContext *ctx,
+    struct DebuggerSuspendedState *state,
+    JSValue var_name, JSValue var_val) {
+    JSValue var = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, var, "name", var_name);
+    JS_SetPropertyStr(ctx, var, "value", JS_ToString(ctx, var_val));
+    // 0 means not expandible
+    uint32_t reference = 0;
+    if (JS_IsString(var_val))
+        JS_SetPropertyStr(ctx, var, "type", JS_NewString(ctx, "string"));
+    else if (JS_IsInteger(var_val))
+        JS_SetPropertyStr(ctx, var, "type", JS_NewString(ctx, "integer"));
+    else if (JS_IsNumber(var_val) || JS_IsBigFloat(var_val))
+        JS_SetPropertyStr(ctx, var, "type", JS_NewString(ctx, "float"));
+    else if (JS_IsBool(var_val))
+        JS_SetPropertyStr(ctx, var, "type", JS_NewString(ctx, "boolean"));
+    else if (JS_IsNull(var_val))
+        JS_SetPropertyStr(ctx, var, "type", JS_NewString(ctx, "null"));
+    else if (JS_IsUndefined(var_val))
+        JS_SetPropertyStr(ctx, var, "type", JS_NewString(ctx, "undefined"));
+    else if (JS_IsObject(var_val)) {
+        JS_SetPropertyStr(ctx, var, "type", JS_NewString(ctx, "object"));
+
+        JSObject *p = JS_VALUE_GET_OBJ(var_val);
+        // todo: xor the the two dwords to get a better hash?
+        uint32_t pl = (uint32_t)p;
+        JSValue found = JS_GetPropertyUint32(ctx, state->variable_pointers, pl);
+        if (JS_IsUndefined(found)) {
+            reference = state->variable_reference_count++;
+            JS_SetPropertyUint32(ctx, state->variable_references, reference, JS_DupValue(ctx, var_val));
+            JS_SetPropertyUint32(ctx, state->variable_pointers, pl, JS_DupValue(ctx, var_val));
+        }
+        else
+            JS_ToUint32(ctx, &reference, found);
+        JS_FreeValue(ctx, found);
+    }
+    JS_SetPropertyStr(ctx, var, "variablesReference", JS_NewInt32(ctx, reference));
+
+    return var;
+}
+
+static int js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedState *state, JSValue request) {
     JSContext *ctx = info->ctx;
     JSValue command_property = JS_GetPropertyStr(ctx, request, "command");
     const char *command = JS_ToCString(ctx, command_property);
@@ -142,23 +191,50 @@ static int js_process_request(JSDebuggerInfo *info, JSValue request) {
         JSValue args = JS_GetPropertyStr(ctx, request, "args");
         JSValue reference_property = JS_GetPropertyStr(ctx, args, "variablesReference");
         JS_FreeValue(ctx, args);
-        int scope;
-        JS_ToInt32(ctx, &scope, reference_property);
+        uint32_t reference;
+        JS_ToUint32(ctx, &reference, reference_property);
         JS_FreeValue(ctx, reference_property);
-        int frame = scope >> 2;
-        scope = scope % 4;
 
-        JSValue variables = JS_UNDEFINED;
-        if (scope == 0)
-            variables = js_debugger_global_variables(ctx);
-        else if (scope == 1)
-            variables = js_debugger_local_variables(ctx, frame);
-        else if (scope == 2)
-            variables = js_debugger_closure_variables(ctx, frame);
+        JSValue variable = JS_GetPropertyUint32(ctx, state->variable_references, reference);
 
-        JSValue body = JS_NewObject(ctx);
-        JS_SetPropertyStr(ctx, body, "variables", variables);
-        js_transport_send_response(info, request, body);
+        // if the variable reference was not found,
+        // then it must be a frame locals, frame closures, or the global
+        if (JS_IsUndefined(variable)) {
+            int frame = reference >> 2;
+            int scope = reference % 4;
+
+            assert(frame < js_debugger_stack_depth(ctx));
+
+            if (scope == 0)
+                variable = js_debugger_global_variables(ctx);
+            else if (scope == 1)
+                variable = js_debugger_local_variables(ctx, frame);
+            else if (scope == 2)
+                variable = js_debugger_closure_variables(ctx, frame);
+            else
+                assert(0);
+
+            // need to dupe the variable, as it's used below as well.
+            JS_SetPropertyUint32(ctx, state->variable_references, reference, JS_DupValue(ctx, variable));
+        }
+
+        JSValue properties = JS_NewArray(ctx);
+        JSPropertyEnum *tab_atom;
+        uint32_t tab_atom_count;
+        if (!JS_GetOwnPropertyNames(ctx, &tab_atom, &tab_atom_count, variable,
+            JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY)) {
+
+            for(int i = 0; i < tab_atom_count; i++) {
+                JSValue value = JS_GetProperty(ctx, variable, tab_atom[i].atom);
+                JSValue variable_json = js_debugger_get_variable(ctx, state, JS_AtomToString(ctx, tab_atom[i].atom), value);
+                JS_FreeValue(ctx, value);
+                JS_SetPropertyUint32(ctx, properties, i, variable_json);
+            }
+        }
+
+        JS_FreeValue(ctx, variable);
+
+        js_transport_send_response(info, request, properties);
     }
     JS_FreeCString(ctx, command);
     JS_FreeValue(ctx, command_property);
@@ -201,11 +277,17 @@ JSValue js_debugger_file_breakpoints(JSContext *ctx, const char* path) {
 static int js_process_debugger_messages(JSDebuggerInfo *info) {
     // continue processing messages until the continue message is received.
     JSContext *ctx = info->ctx;
+    struct DebuggerSuspendedState state;
+    state.variable_reference_count = js_debugger_stack_depth(ctx) << 2;
+    state.variable_pointers = JS_NewObject(ctx);
+    state.variable_references = JS_NewObject(ctx);
     int done_processing = 0;
+    int ret = 0;
+
     while (!done_processing) {
         int message_length;
         if (!js_transport_read_fully(info, (char *)&message_length, sizeof(message_length)))
-            return 0;
+            goto done;
 
         message_length = ntohl(message_length);
         if (message_length > info->message_buffer_length) {
@@ -220,14 +302,14 @@ static int js_process_debugger_messages(JSDebuggerInfo *info) {
         }
 
         if (!js_transport_read_fully(info, info->message_buffer, message_length))
-            return 0;
+            goto done;
         
         info->message_buffer[message_length] = '\0';
 
         JSValue message = JS_ParseJSON(ctx, info->message_buffer, message_length, "<debugger>");
         const char *type = JS_ToCString(ctx, JS_GetPropertyStr(ctx, message, "type"));
         if (strcmp("request", type) == 0) {
-            done_processing = !js_process_request(info, JS_GetPropertyStr(ctx, message, "request"));
+            done_processing = !js_process_request(info, &state, JS_GetPropertyStr(ctx, message, "request"));
             // done_processing = 1;
         }
         else if (strcmp("continue", type) == 0) {
@@ -239,8 +321,12 @@ static int js_process_debugger_messages(JSDebuggerInfo *info) {
         JS_FreeCString(ctx, type);
         JS_FreeValue(ctx, message);
     }
+    ret = 1;
 
-    return 1;
+done:
+    JS_FreeValue(ctx, state.variable_references);
+    JS_FreeValue(ctx, state.variable_pointers);
+    return ret;
 }
 
 static void js_send_stopped_event(JSDebuggerInfo *info, const char *reason) {

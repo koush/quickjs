@@ -50326,6 +50326,16 @@ JSDebuggerInfo *js_debugger_info(JSContext *ctx) {
     return &ctx->debugger_info;
 }
 
+uint32_t js_debugger_stack_depth(JSContext *ctx) {
+    uint32_t stack_index = 0;
+    JSStackFrame *sf = ctx ->current_stack_frame;
+    while (sf != NULL) {
+        sf = sf->prev_frame;
+        stack_index++;
+    }
+    return stack_index;
+}
+
 JSValue js_debugger_build_backtrace(JSContext *ctx)
 {
     JSStackFrame *sf;
@@ -50496,73 +50506,55 @@ done:
     return b->debugger.breakpoints[pc];
 }
 
-static JSValue js_debugger_get_variable(JSContext *ctx, int i, JSValue var_name, JSValue var_val) {
-    JSValue var = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, var, "name", var_name);
-    JS_SetPropertyStr(ctx, var, "value", JS_ToString(ctx, var_val));
-    JS_SetPropertyStr(ctx, var, "variablesReference", JS_NewUint32(ctx, i));
-    // 0 means not expandible
-    int variablesReference = 0;
-    if (JS_IsObject(var_val)) {
-        JS_SetPropertyStr(ctx, var, "type", JS_NewString(ctx, "object"));
-        variablesReference = i + 1;
-    }
-    else if (JS_IsArray(ctx, var_val))
-        JS_SetPropertyStr(ctx, var, "type", JS_NewString(ctx, "array"));
-    else if (JS_IsString(var_val))
-        JS_SetPropertyStr(ctx, var, "type", JS_NewString(ctx, "string"));
-    else if (JS_IsInteger(var_val))
-        JS_SetPropertyStr(ctx, var, "type", JS_NewString(ctx, "integer"));
-    else if (JS_IsNumber(var_val))
-        JS_SetPropertyStr(ctx, var, "type", JS_NewString(ctx, "float"));
-    else if (JS_IsBool(var_val))
-        JS_SetPropertyStr(ctx, var, "type", JS_NewString(ctx, "boolean"));
-    else
-        variablesReference = i + 1;
-    JS_SetPropertyStr(ctx, var, "variablesReference", JS_NewUint32(ctx, variablesReference));
+void js_debugger_enumerate_global_variables(JSContext *ctx, JSValue ret, JSValue global_obj) {
+    JSValue globals = globals =
+        JS_GetOwnPropertyNames2(ctx, ctx->global_obj, JS_GPN_STRING_MASK, JS_ITERATOR_KIND_KEY_AND_VALUE);
+    uint32_t globals_len = 0;
+    if (!js_get_length32(ctx, &globals_len, globals)) {
+        for (int i = 0; i < globals_len; i++) {
+            JSValue global = JS_GetPropertyUint32(ctx, globals, i);
+            JSValue key = JS_GetPropertyUint32(ctx, global, 0);
+            JSValue value = JS_GetPropertyUint32(ctx, global, 1);
+            JS_FreeValue(ctx, global);
 
-    return var;
+            const char* key_string = JS_ToCString(ctx, key);
+            JS_SetPropertyStr(ctx, ret, key_string, value);
+            JS_FreeCString(ctx, key_string);
+            JS_FreeValue(ctx, key);
+        }
+    }
+    JS_FreeValue(ctx, globals);
 }
 
-
 JSValue js_debugger_global_variables(JSContext *ctx) {
-    JSValue ret = JS_NewArray(ctx);
-    uint32_t var_count = 0;
+    JSValue ret = JS_NewObject(ctx);
 
-    for (int i = 0; i < 2; i++) {
-        JSValue globals;
-        if (i == 0)
-            globals = JS_GetOwnPropertyNames2(ctx, ctx->global_obj, JS_GPN_STRING_MASK, JS_ITERATOR_KIND_KEY_AND_VALUE);
-        else
-            globals = JS_GetOwnPropertyNames2(ctx, ctx->global_var_obj, JS_GPN_STRING_MASK, JS_ITERATOR_KIND_KEY_AND_VALUE);
-
-        uint32_t globals_len = 0;
-        if (!js_get_length32(ctx, &globals_len, globals)) {
-            for (int i = 0; i < globals_len; i++) {
-                JSValue global = JS_GetPropertyUint32(ctx, globals, i);
-                JSValue key = JS_GetPropertyUint32(ctx, global, 0);
-                JSValue value = JS_GetPropertyUint32(ctx, global, 1);
-                JS_FreeValue(ctx, global);
-
-                JSValue var = js_debugger_get_variable(ctx, i, key, value);
-                // this value isn't from the stack, so it needs to be dereferenced.
-                JS_FreeValue(ctx, value);
-                JS_SetPropertyUint32(ctx, ret, var_count++, var);
-            }
-        }
-
-        JS_FreeValue(ctx, globals);
-    }
+    js_debugger_enumerate_global_variables(ctx, ret, ctx->global_obj);
+    js_debugger_enumerate_global_variables(ctx, ret, ctx->global_var_obj);
 
     return ret;
 }
 
 JSValue js_debugger_local_variables(JSContext *ctx, int stack_index) {
-    JSValue ret = JS_NewArray(ctx);
+    JSValue ret = JS_NewObject(ctx);
 
     JSStackFrame *sf;
     int cur_index = 0;
+
     for(sf = ctx->current_stack_frame; sf != NULL; sf = sf->prev_frame) {
+        // this val is one frame up
+        if (cur_index == stack_index - 1) {
+            JSObject *f = JS_VALUE_GET_OBJ(sf->cur_func);
+            if (js_class_has_bytecode(f->class_id)) {
+                JSFunctionBytecode *b = f->u.func.function_bytecode;
+
+                JSValue this_obj = sf->var_buf[b->var_count];
+                // only provide a this if it is not the global object.
+                if (JS_VALUE_GET_OBJ(this_obj) != JS_VALUE_GET_OBJ(ctx->global_obj))
+                    JS_SetPropertyStr(ctx, ret, "this", JS_DupValue(ctx, this_obj));
+            }
+        }
+
         if (cur_index < stack_index) {
             cur_index++;
             continue;
@@ -50571,10 +50563,8 @@ JSValue js_debugger_local_variables(JSContext *ctx, int stack_index) {
         JSObject *f = JS_VALUE_GET_OBJ(sf->cur_func);
         if (!js_class_has_bytecode(f->class_id))
             goto done;
-
         JSFunctionBytecode *b = f->u.func.function_bytecode;
-        
-        uint32_t var_count = 0;
+
         for (uint32_t i = 0; i < b->arg_count + b->var_count; i++) {
             JSValue var_val;
             if (i < b->arg_count)
@@ -50585,8 +50575,7 @@ JSValue js_debugger_local_variables(JSContext *ctx, int stack_index) {
                 continue;
 
             JSVarDef *vd = b->vardefs + i;
-            JSValue var = js_debugger_get_variable(ctx, i, JS_AtomToValue(ctx, vd->var_name), var_val);
-            JS_SetPropertyUint32(ctx, ret, var_count++, var);
+            JS_SetProperty(ctx, ret, vd->var_name, JS_DupValue(ctx, var_val));
         }
 
         break;
@@ -50618,7 +50607,7 @@ static JSValue js_debugger_find_closure_var(JSStackFrame *sf, JSClosureVar *cvar
 }
 
 JSValue js_debugger_closure_variables(JSContext *ctx, int stack_index) {
-    JSValue ret = JS_NewArray(ctx);
+    JSValue ret = JS_NewObject(ctx);
 
     JSStackFrame *sf;
     int cur_index = 0;
@@ -50634,15 +50623,10 @@ JSValue js_debugger_closure_variables(JSContext *ctx, int stack_index) {
 
         JSFunctionBytecode *b = f->u.func.function_bytecode;
 
-        uint32_t var_count = 0;
         for (uint32_t i = 0; i < b->closure_var_count; i++) {
             JSClosureVar *cvar = b->closure_var + i;
-            JSValue var_val = js_debugger_find_closure_var(sf, cvar);
-            if (JS_IsFunction(ctx, var_val))
-                continue;
-
-            JSValue var = js_debugger_get_variable(ctx, i, JS_AtomToValue(ctx, cvar->var_name), var_val);
-            JS_SetPropertyUint32(ctx, ret, var_count++, var);
+            JSValue var_val = JS_DupValue(ctx, js_debugger_find_closure_var(sf, cvar));
+            JS_SetProperty(ctx, ret, cvar->var_name, var_val);
         }
 
         break;
@@ -50650,4 +50634,19 @@ JSValue js_debugger_closure_variables(JSContext *ctx, int stack_index) {
 
 done:
     return ret;
+}
+
+JSValue js_debugger_evaluate(JSContext *ctx, int stack_index, JSValue expression) {
+    JSStackFrame *sf;
+    int cur_index = 0;
+    for(sf = ctx->current_stack_frame; sf != NULL; sf = sf->prev_frame) {
+        if (cur_index < stack_index) {
+            cur_index++;
+            continue;
+        }
+
+        // return JS_EvalObject(ctx, sf->, JS_NewString(ctx, "console.log('a: ' + a)"), JS_EVAL_TYPE_DIRECT, 0);
+    }
+
+    return JS_UNDEFINED;
 }
