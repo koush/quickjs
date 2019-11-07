@@ -50419,7 +50419,7 @@ int js_debugger_check_breakpoint(JSContext *ctx, uint32_t current_dirty) {
     // todo: bit field?
     // clear/alloc breakpoints
     if (!b->debugger.breakpoints)
-        b->debugger.breakpoints = js_malloc(ctx, b->byte_code_len);
+        b->debugger.breakpoints = js_malloc_rt(ctx->rt, b->byte_code_len);
     memset(b->debugger.breakpoints, 0, b->byte_code_len);
 
     JSValue breakpoints = JS_GetPropertyStr(ctx, path_data, "breakpoints");
