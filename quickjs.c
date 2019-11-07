@@ -50358,7 +50358,7 @@ JSValue js_debugger_build_backtrace(JSContext *ctx)
         JS_FreeCString(ctx, func_name_str);
 
         p = JS_VALUE_GET_OBJ(sf->cur_func);
-        if (js_class_has_bytecode(p->class_id)) {
+        if (p && js_class_has_bytecode(p->class_id)) {
             JSFunctionBytecode *b;
             int line_num1;
 
@@ -50508,7 +50508,7 @@ done:
 
 void js_debugger_enumerate_global_variables(JSContext *ctx, JSValue ret, JSValue global_obj) {
     JSValue globals = globals =
-        JS_GetOwnPropertyNames2(ctx, ctx->global_obj, JS_GPN_STRING_MASK, JS_ITERATOR_KIND_KEY_AND_VALUE);
+        JS_GetOwnPropertyNames2(ctx, global_obj, JS_GPN_STRING_MASK, JS_ITERATOR_KIND_KEY_AND_VALUE);
     uint32_t globals_len = 0;
     if (!js_get_length32(ctx, &globals_len, globals)) {
         for (int i = 0; i < globals_len; i++) {
@@ -50545,7 +50545,7 @@ JSValue js_debugger_local_variables(JSContext *ctx, int stack_index) {
         // this val is one frame up
         if (cur_index == stack_index - 1) {
             JSObject *f = JS_VALUE_GET_OBJ(sf->cur_func);
-            if (js_class_has_bytecode(f->class_id)) {
+            if (f && js_class_has_bytecode(f->class_id)) {
                 JSFunctionBytecode *b = f->u.func.function_bytecode;
 
                 JSValue this_obj = sf->var_buf[b->var_count];
@@ -50561,7 +50561,7 @@ JSValue js_debugger_local_variables(JSContext *ctx, int stack_index) {
         }
 
         JSObject *f = JS_VALUE_GET_OBJ(sf->cur_func);
-        if (!js_class_has_bytecode(f->class_id))
+        if (!f || !js_class_has_bytecode(f->class_id))
             goto done;
         JSFunctionBytecode *b = f->u.func.function_bytecode;
 
@@ -50589,7 +50589,7 @@ static JSValue js_debugger_find_closure_var(JSStackFrame *sf, JSClosureVar *cvar
     while (sf && sf->prev_frame) {
         sf = sf->prev_frame;
         JSObject *f = JS_VALUE_GET_OBJ(sf->cur_func);
-        if (!js_class_has_bytecode(f->class_id))
+        if (!f || !js_class_has_bytecode(f->class_id))
             return JS_UNDEFINED;
         JSFunctionBytecode *b = f->u.func.function_bytecode;
 
@@ -50618,7 +50618,7 @@ JSValue js_debugger_closure_variables(JSContext *ctx, int stack_index) {
         }
 
         JSObject *f = JS_VALUE_GET_OBJ(sf->cur_func);
-        if (!js_class_has_bytecode(f->class_id))
+        if (!f || !js_class_has_bytecode(f->class_id))
             goto done;
 
         JSFunctionBytecode *b = f->u.func.function_bytecode;
@@ -50636,17 +50636,95 @@ done:
     return ret;
 }
 
+/* debugger needs ability to eval at any stack frame */
+static JSValue js_debugger_eval(JSContext *ctx, JSValueConst this_obj, JSStackFrame *sf,
+                                 const char *input, size_t input_len,
+                                 const char *filename, int flags, int scope_idx)
+{
+    JSParseState s1, *s = &s1;
+    int err, js_mode;
+    JSValue fun_obj, ret_val;
+    JSVarRef **var_refs;
+    JSFunctionBytecode *b;
+    JSFunctionDef *fd;
+
+    js_parse_init(ctx, s, input, input_len, filename);
+    skip_shebang(s);
+
+    JSObject *p;
+    assert(sf != NULL);
+    assert(JS_VALUE_GET_TAG(sf->cur_func) == JS_TAG_OBJECT);
+    p = JS_VALUE_GET_OBJ(sf->cur_func);
+    assert(js_class_has_bytecode(p->class_id));
+    b = p->u.func.function_bytecode;
+    var_refs = p->u.func.var_refs;
+    js_mode = b->js_mode;
+
+    fd = js_new_function_def(ctx, NULL, TRUE, FALSE, filename, 1);
+    if (!fd)
+        goto fail1;
+    s->cur_func = fd;
+    fd->eval_type = JS_EVAL_TYPE_DIRECT;
+    fd->has_this_binding = 0;
+    fd->new_target_allowed = b->new_target_allowed;
+    fd->super_call_allowed = b->super_call_allowed;
+    fd->super_allowed = b->super_allowed;
+    fd->arguments_allowed = b->arguments_allowed;
+    fd->js_mode = js_mode;
+    fd->func_name = JS_DupAtom(ctx, JS_ATOM__eval_);
+    if (b) {
+        if (add_closure_variables(ctx, fd, b, scope_idx))
+            goto fail;
+    }
+    fd->module = NULL;
+    s->is_module = 0;
+    s->allow_html_comments = !s->is_module;
+
+    push_scope(s); /* body scope */
+
+    err = js_parse_program(s);
+    if (err) {
+    fail:
+        free_token(s, &s->token);
+        js_free_function_def(ctx, fd);
+        goto fail1;
+    }
+
+    /* create the function object and all the enclosed functions */
+    fun_obj = js_create_function(ctx, fd);
+    if (JS_IsException(fun_obj))
+        goto fail1;
+    if (flags & JS_EVAL_FLAG_COMPILE_ONLY) {
+        ret_val = fun_obj;
+    } else {
+        ret_val = JS_EvalFunctionInternal(ctx, fun_obj, this_obj, var_refs, sf);
+    }
+    return ret_val;
+ fail1:
+    return JS_EXCEPTION;
+}
+
 JSValue js_debugger_evaluate(JSContext *ctx, int stack_index, JSValue expression) {
     JSStackFrame *sf;
     int cur_index = 0;
+
     for(sf = ctx->current_stack_frame; sf != NULL; sf = sf->prev_frame) {
         if (cur_index < stack_index) {
             cur_index++;
             continue;
         }
 
-        // return JS_EvalObject(ctx, sf->, JS_NewString(ctx, "console.log('a: ' + a)"), JS_EVAL_TYPE_DIRECT, 0);
-    }
+        JSObject *f = JS_VALUE_GET_OBJ(sf->cur_func);
+        if (!f || !js_class_has_bytecode(f->class_id))
+            return JS_UNDEFINED;
+        JSFunctionBytecode *b = f->u.func.function_bytecode;
 
+        int scope_idx = b->vardefs ? 0 : -1;
+        size_t len;
+        const char* str = JS_ToCStringLen(ctx, &len, expression);
+        JSValue ret = js_debugger_eval(ctx, sf->var_buf[b->var_count], sf, str, len, "<debugger>", JS_EVAL_TYPE_DIRECT, scope_idx);
+        JS_FreeCString(ctx, str);
+        return ret;
+    }
     return JS_UNDEFINED;
 }

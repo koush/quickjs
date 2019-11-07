@@ -60,6 +60,7 @@ static int js_transport_write_value(JSDebuggerInfo *info, JSValue value) {
     JSValue stringified = js_debugger_json_stringify(info->ctx, value);
     size_t len;
     const char* str = JS_ToCStringLen(info->ctx, &len, stringified);
+    assert(len);
     int ret = js_transport_write_message(info, str, len);
     JS_FreeCString(info->ctx, str);
     JS_FreeValue(info->ctx, stringified);
@@ -117,12 +118,9 @@ static JSValue js_get_scopes(JSContext *ctx, int frame) {
     return scopes;
 }
 
-static JSValue js_debugger_get_variable(JSContext *ctx,
+static void js_debugger_get_variable_type(JSContext *ctx,
     struct DebuggerSuspendedState *state,
-    JSValue var_name, JSValue var_val) {
-    JSValue var = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, var, "name", var_name);
-    JS_SetPropertyStr(ctx, var, "value", JS_ToString(ctx, var_val));
+    JSValue var, JSValue var_val) {
     // 0 means not expandible
     uint32_t reference = 0;
     if (JS_IsString(var_val))
@@ -147,15 +145,33 @@ static JSValue js_debugger_get_variable(JSContext *ctx,
         if (JS_IsUndefined(found)) {
             reference = state->variable_reference_count++;
             JS_SetPropertyUint32(ctx, state->variable_references, reference, JS_DupValue(ctx, var_val));
-            JS_SetPropertyUint32(ctx, state->variable_pointers, pl, JS_DupValue(ctx, var_val));
+            JS_SetPropertyUint32(ctx, state->variable_pointers, pl, JS_NewInt32(ctx, reference));
         }
         else
             JS_ToUint32(ctx, &reference, found);
         JS_FreeValue(ctx, found);
     }
     JS_SetPropertyStr(ctx, var, "variablesReference", JS_NewInt32(ctx, reference));
+}
 
+static JSValue js_debugger_get_variable(JSContext *ctx,
+    struct DebuggerSuspendedState *state,
+    JSValue var_name, JSValue var_val) {
+    JSValue var = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, var, "name", var_name);
+    JS_SetPropertyStr(ctx, var, "value", JS_ToString(ctx, var_val));
+
+    js_debugger_get_variable_type(ctx, state, var, var_val);
     return var;
+}
+
+static int js_debugger_get_frame(JSContext *ctx, JSValue args) {
+    JSValue reference_property = JS_GetPropertyStr(ctx, args, "frameId");
+    int frame;
+    JS_ToInt32(ctx, &frame, reference_property);
+    JS_FreeValue(ctx, reference_property);
+
+    return frame;
 }
 
 static int js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedState *state, JSValue request) {
@@ -168,10 +184,43 @@ static int js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedStat
         ret = 0;
     }
     else if (strcmp("next", command) == 0) {
-        info->stepping = 1;
+        info->stepping = JS_DEBUGGER_STEP;
         info->step_over = js_debugger_current_location(ctx);
+        info->step_depth = js_debugger_stack_depth(ctx);
         js_transport_send_response(info, request, JS_UNDEFINED);
         ret = 0;
+    }
+    else if (strcmp("stepIn", command) == 0) {
+        info->stepping = JS_DEBUGGER_STEP_IN;
+        info->step_over = js_debugger_current_location(ctx);
+        info->step_depth = js_debugger_stack_depth(ctx);
+        js_transport_send_response(info, request, JS_UNDEFINED);
+        ret = 0;
+    }
+    else if (strcmp("stepOut", command) == 0) {
+        info->stepping = JS_DEBUGGER_STEP_OUT;
+        info->step_over = js_debugger_current_location(ctx);
+        info->step_depth = js_debugger_stack_depth(ctx);
+        js_transport_send_response(info, request, JS_UNDEFINED);
+        ret = 0;
+    }
+    else if (strcmp("evaluate", command) == 0) {
+        JSValue args = JS_GetPropertyStr(ctx, request, "args");
+        int frame = js_debugger_get_frame(ctx, args);
+        JSValue expression = JS_GetPropertyStr(ctx, args, "expression");
+        JS_FreeValue(ctx, args);
+        JSValue result = js_debugger_evaluate(ctx, frame, expression);
+        if (JS_IsException(result)) {
+            JS_FreeValue(ctx, result);
+            result = JS_GetException(ctx);
+        }
+        JS_FreeValue(ctx, expression);
+
+        JSValue body = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, body, "result", JS_ToString(ctx, result));
+        js_debugger_get_variable_type(ctx, state, body, result);
+        JS_FreeValue(ctx, result);
+        js_transport_send_response(info, request, body);
     }
     else if (strcmp("stackTrace", command) == 0) {
         JSValue stack_trace = js_debugger_build_backtrace(ctx);
@@ -179,11 +228,8 @@ static int js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedStat
     }
     else if (strcmp("scopes", command) == 0) {
         JSValue args = JS_GetPropertyStr(ctx, request, "args");
-        JSValue reference_property = JS_GetPropertyStr(ctx, args, "frameId");
+        int frame = js_debugger_get_frame(ctx, args);
         JS_FreeValue(ctx, args);
-        int frame;
-        JS_ToInt32(ctx, &frame, reference_property);
-        JS_FreeValue(ctx, reference_property);
         JSValue scopes = js_get_scopes(ctx, frame);
         js_transport_send_response(info, request, scopes);
     }
@@ -359,16 +405,47 @@ void js_debugger_check(JSContext* ctx, JSDebuggerInfo *info) {
 
     int at_breakpoint = js_debugger_check_breakpoint(ctx, info->breakpoints_dirty_counter);
     if (at_breakpoint) {
+        // reaching a breakpoint resets any existing stepping.
+        info->stepping = 0;
         js_send_stopped_event(info, "breakpoint");
     }
     else if (info->stepping) {
-        struct JSDebuggerLocation location = js_debugger_current_location(ctx);
-        if (location.filename == info->step_over.filename
-            && location.line == info->step_over.line
-            && location.column == info->step_over.column)
-            goto done;
-        info->stepping = 0;
-        js_send_stopped_event(info, "step");
+        if (info->stepping == JS_DEBUGGER_STEP_IN) {
+            int depth = js_debugger_stack_depth(ctx);
+            // break if the stack is deeper
+            // or
+            // break if the depth is the same, but the location has changed
+            // or
+            // break if the stack unwinds
+            if (info->step_depth == depth) {
+                struct JSDebuggerLocation location = js_debugger_current_location(ctx);
+                if (location.filename == info->step_over.filename
+                    && location.line == info->step_over.line
+                    && location.column == info->step_over.column)
+                    goto done;
+            }
+            info->stepping = 0;
+            js_send_stopped_event(info, "stepIn");
+        }
+        else if (info->stepping == JS_DEBUGGER_STEP_OUT) {
+            int depth = js_debugger_stack_depth(ctx);
+            if (depth >= info->step_depth)
+                goto done;
+            info->stepping = 0;
+            js_send_stopped_event(info, "stepOut");
+        }
+        else {
+            struct JSDebuggerLocation location = js_debugger_current_location(ctx);
+            // to step over, need to make sure the location changes,
+            // and that the location change isn't into a function call (deeper stack).
+            if ((location.filename == info->step_over.filename
+                && location.line == info->step_over.line
+                && location.column == info->step_over.column)
+                || js_debugger_stack_depth(ctx) > info->step_depth)
+                goto done;
+            info->stepping = 0;
+            js_send_stopped_event(info, "step");
+        }
     }
     else {
         // only peek at the stream every now and then.

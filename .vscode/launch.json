@@ -18,7 +18,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/qjs-debug",
             "args": [
-                "/Volumes/Dev/quickjs/test.js"
+                "/Volumes/Dev/test/vscode-quickjs-debug/src/tests/data/test.js"
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

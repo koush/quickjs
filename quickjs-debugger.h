@@ -17,6 +17,10 @@ typedef struct JSDebuggerLocation {
     int column;
 } JSDebuggerLocation;
 
+#define JS_DEBUGGER_STEP 1
+#define JS_DEBUGGER_STEP_IN 2
+#define JS_DEBUGGER_STEP_OUT 3
+
 typedef struct JSDebuggerInfo {
     JSContext *ctx;
  
@@ -36,6 +40,7 @@ typedef struct JSDebuggerInfo {
     uint32_t breakpoints_dirty_counter;
     int stepping;
     JSDebuggerLocation step_over;
+    int step_depth;
 } JSDebuggerInfo;
 
 void js_debugger_check(JSContext *ctx, JSDebuggerInfo *info);
