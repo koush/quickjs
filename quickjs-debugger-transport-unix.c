@@ -86,6 +86,7 @@ static void js_transport_close(JSContext* ctx, void *udata) {
         return;
     close(data->handle);
     data->handle = 0;
+    free(udata);
 }
 
 void js_debugger_connect(JSContext *ctx, char *address) {

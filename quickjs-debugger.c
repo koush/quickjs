@@ -523,6 +523,11 @@ void js_debugger_free(JSContext *ctx, JSDebuggerInfo *info) {
     info->transport_peek = NULL;
     info->transport_close = NULL;
 
+    if (info->message_buffer) {
+        js_free(ctx, info->message_buffer);
+        info->message_buffer = NULL;
+    }
+
     JS_FreeValue(ctx, info->breakpoints);
 }
 
