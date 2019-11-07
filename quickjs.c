@@ -50692,7 +50692,7 @@ static JSValue js_debugger_eval(JSContext *ctx, JSValueConst this_obj, JSStackFr
 
     err = js_parse_program(s);
     if (err) {
-    fail:
+fail:
         free_token(s, &s->token);
         js_free_function_def(ctx, fd);
         goto fail1;
@@ -50708,7 +50708,7 @@ static JSValue js_debugger_eval(JSContext *ctx, JSValueConst this_obj, JSStackFr
         ret_val = JS_EvalFunctionInternal(ctx, fun_obj, this_obj, var_refs, sf);
     }
     return ret_val;
- fail1:
+fail1:
     return JS_EXCEPTION;
 }
 

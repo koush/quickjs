@@ -12,6 +12,13 @@ function foo (t) {
         f: 34.55,
     };
 
+    var arr2 = new Uint8Array(10000);
+    var arr = [];
+    for (var i = 0; i < 10000; i++) {
+        arr.push(i);
+        arr2[i] = i;
+    }
+
     function noob() {
         console.log('f;asdsad`')
         console.log(a);
@@ -34,7 +41,9 @@ function bar() {
 }
 
 class Blub {
-    peeps = 3;
+    constructor() {
+        this.peeps = 3;
+    }
     jib() {
         console.log(this);
         bar();

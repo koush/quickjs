@@ -168,7 +168,21 @@ static JSValue js_debugger_get_variable(JSContext *ctx,
     JSValue var_name, JSValue var_val) {
     JSValue var = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, var, "name", var_name);
-    JS_SetPropertyStr(ctx, var, "value", JS_ToString(ctx, var_val));
+    // do not toString on Arrays, since that makes a giant string of all the elements.
+    // todo: typed arrays?
+    if (JS_IsArray(ctx, var_val)) {
+        JSValue length = JS_GetPropertyStr(ctx, var_val, "length");
+        uint32_t len;
+        JS_ToUint32(ctx, &len, length);
+        JS_FreeValue(ctx, length);
+        char lenBuf[64];
+        sprintf(lenBuf, "Array (%d)", len);
+        JS_SetPropertyStr(ctx, var, "value", JS_NewString(ctx, lenBuf));
+        JS_SetPropertyStr(ctx, var, "indexedVariables", JS_NewInt32(ctx, len));
+    }
+    else {
+        JS_SetPropertyStr(ctx, var, "value", JS_ToString(ctx, var_val));
+    }
 
     js_debugger_get_variable_type(ctx, state, var, var_val);
     return var;
@@ -192,6 +206,24 @@ static void js_send_stopped_event(JSDebuggerInfo *info, const char *reason) {
     JS_SetPropertyStr(ctx, event, "reason", JS_NewString(ctx, reason));
     JS_SetPropertyStr(ctx, event, "thread", JS_NewInt64(ctx, (int64_t)ctx));
     js_transport_send_event(info, event);
+}
+
+static void js_free_prop_enum(JSContext *ctx, JSPropertyEnum *tab, uint32_t len)
+{
+    uint32_t i;
+    if (tab) {
+        for(i = 0; i < len; i++)
+            JS_FreeAtom(ctx, tab[i].atom);
+        js_free(ctx, tab);
+    }
+}
+
+static uint32_t js_get_property_as_uint32(JSContext *ctx, JSValue obj, const char* property) {
+    JSValue prop = JS_GetPropertyStr(ctx, obj, property);
+    uint32_t ret;
+    JS_ToUint32(ctx, &ret, prop);
+    JS_FreeValue(ctx, prop);
+    return ret;
 }
 
 static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedState *state, JSValue request) {
@@ -291,6 +323,34 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
         JSValue properties = JS_NewArray(ctx);
         JSPropertyEnum *tab_atom;
         uint32_t tab_atom_count;
+
+        JSValue filter = JS_GetPropertyStr(ctx, args, "filter");
+        if (!JS_IsUndefined(filter)) {
+            const char *filter_str = JS_ToCString(ctx, filter);
+            JS_FreeValue(ctx, filter);
+            // only index filtering is supported by this server.
+            // name filtering exists in VS Code, but is not implemented here.
+            int indexed = strcmp(filter_str, "indexed") == 0;
+            JS_FreeCString(ctx, filter_str);
+            if (!indexed)
+                goto unfiltered;
+
+            uint32_t start = js_get_property_as_uint32(ctx, args, "start");
+            uint32_t count = js_get_property_as_uint32(ctx, args, "count");
+
+            char name_buf[64];
+            for (uint32_t i = 0; i < count; i++) {
+                JSValue value = JS_GetPropertyUint32(ctx, variable, start + i);
+                sprintf(name_buf, "%d", i);
+                JSValue variable_json = js_debugger_get_variable(ctx, state, JS_NewString(ctx, name_buf), value);
+                JS_FreeValue(ctx, value);
+                JS_SetPropertyUint32(ctx, properties, i, variable_json);
+            }
+            goto done;
+        }
+
+    unfiltered:
+
         if (!JS_GetOwnPropertyNames(ctx, &tab_atom, &tab_atom_count, variable,
             JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY)) {
 
@@ -300,8 +360,11 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
                 JS_FreeValue(ctx, value);
                 JS_SetPropertyUint32(ctx, properties, i, variable_json);
             }
+
+            js_free_prop_enum(ctx, tab_atom, tab_atom_count);
         }
 
+    done:
         JS_FreeValue(ctx, variable);
 
         js_transport_send_response(info, request, properties);
