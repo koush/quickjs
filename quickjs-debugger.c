@@ -194,39 +194,39 @@ static void js_send_stopped_event(JSDebuggerInfo *info, const char *reason) {
     js_transport_send_event(info, event);
 }
 
-static int js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedState *state, JSValue request) {
+static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedState *state, JSValue request) {
     JSContext *ctx = info->ctx;
     JSValue command_property = JS_GetPropertyStr(ctx, request, "command");
     const char *command = JS_ToCString(ctx, command_property);
-    int ret = 1;
     if (strcmp("continue", command) == 0) {
         js_transport_send_response(info, request, JS_UNDEFINED);
-        ret = 0;
+        info->is_paused = 0;
     }
     if (strcmp("pause", command) == 0) {
         js_transport_send_response(info, request, JS_UNDEFINED);
         js_send_stopped_event(info, "pause");
+        info->is_paused = 1;
     }
     else if (strcmp("next", command) == 0) {
         info->stepping = JS_DEBUGGER_STEP;
         info->step_over = js_debugger_current_location(ctx);
         info->step_depth = js_debugger_stack_depth(ctx);
         js_transport_send_response(info, request, JS_UNDEFINED);
-        ret = 0;
+        info->is_paused = 0;
     }
     else if (strcmp("stepIn", command) == 0) {
         info->stepping = JS_DEBUGGER_STEP_IN;
         info->step_over = js_debugger_current_location(ctx);
         info->step_depth = js_debugger_stack_depth(ctx);
         js_transport_send_response(info, request, JS_UNDEFINED);
-        ret = 0;
+        info->is_paused = 0;
     }
     else if (strcmp("stepOut", command) == 0) {
         info->stepping = JS_DEBUGGER_STEP_OUT;
         info->step_over = js_debugger_current_location(ctx);
         info->step_depth = js_debugger_stack_depth(ctx);
         js_transport_send_response(info, request, JS_UNDEFINED);
-        ret = 0;
+        info->is_paused = 0;
     }
     else if (strcmp("evaluate", command) == 0) {
         JSValue args = JS_GetPropertyStr(ctx, request, "args");
@@ -309,7 +309,6 @@ static int js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedStat
     JS_FreeCString(ctx, command);
     JS_FreeValue(ctx, command_property);
     JS_FreeValue(ctx, request);
-    return ret;
 }
 
 static void js_process_breakpoints(JSDebuggerInfo *info, JSValue message) {
@@ -351,11 +350,10 @@ static int js_process_debugger_messages(JSDebuggerInfo *info) {
     state.variable_reference_count = js_debugger_stack_depth(ctx) << 2;
     state.variable_pointers = JS_NewObject(ctx);
     state.variable_references = JS_NewObject(ctx);
-    int done_processing = 0;
     int ret = 0;
     char message_length_buf[10];
 
-    while (!done_processing) {
+    do {
         fflush(stdout);
         fflush(stderr);
 
@@ -386,11 +384,11 @@ static int js_process_debugger_messages(JSDebuggerInfo *info) {
         JSValue message = JS_ParseJSON(ctx, info->message_buffer, message_length, "<debugger>");
         const char *type = JS_ToCString(ctx, JS_GetPropertyStr(ctx, message, "type"));
         if (strcmp("request", type) == 0) {
-            done_processing = !js_process_request(info, &state, JS_GetPropertyStr(ctx, message, "request"));
+            js_process_request(info, &state, JS_GetPropertyStr(ctx, message, "request"));
             // done_processing = 1;
         }
         else if (strcmp("continue", type) == 0) {
-            done_processing = 1;
+            info->is_paused = 0;
         }
         else if (strcmp("breakpoints", type) == 0) {
             js_process_breakpoints(info, JS_GetPropertyStr(ctx, message, "breakpoints"));
@@ -404,6 +402,8 @@ static int js_process_debugger_messages(JSDebuggerInfo *info) {
         JS_FreeCString(ctx, type);
         JS_FreeValue(ctx, message);
     }
+    while (info->is_paused);
+
     ret = 1;
 
 done:
@@ -419,6 +419,7 @@ void js_debugger_exception(JSContext *ctx) {
     if (!info->exception_breakpoint)
         return;
     js_send_stopped_event(info, "exception");
+    info->is_paused = 1;
     js_process_debugger_messages(info);
 }
 
@@ -444,6 +445,7 @@ void js_debugger_check(JSContext* ctx) {
     if (at_breakpoint) {
         // reaching a breakpoint resets any existing stepping.
         info->stepping = 0;
+        info->is_paused = 1;
         js_send_stopped_event(info, "breakpoint");
     }
     else if (info->stepping) {
@@ -462,6 +464,7 @@ void js_debugger_check(JSContext* ctx) {
                     goto done;
             }
             info->stepping = 0;
+            info->is_paused = 1;
             js_send_stopped_event(info, "stepIn");
         }
         else if (info->stepping == JS_DEBUGGER_STEP_OUT) {
@@ -469,6 +472,7 @@ void js_debugger_check(JSContext* ctx) {
             if (depth >= info->step_depth)
                 goto done;
             info->stepping = 0;
+            info->is_paused = 1;
             js_send_stopped_event(info, "stepOut");
         }
         else {
@@ -481,6 +485,7 @@ void js_debugger_check(JSContext* ctx) {
                 || js_debugger_stack_depth(ctx) > info->step_depth)
                 goto done;
             info->stepping = 0;
+            info->is_paused = 1;
             js_send_stopped_event(info, "step");
         }
     }
@@ -542,6 +547,7 @@ void js_debugger_attach(
     js_send_stopped_event(info, "entry");
 
     info->breakpoints = JS_NewObject(ctx);
+    info->is_paused = 1;
 
     js_process_debugger_messages(info);
 }

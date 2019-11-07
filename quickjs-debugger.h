@@ -29,6 +29,7 @@ typedef struct JSDebuggerInfo {
     char *message_buffer;
     int message_buffer_length;
     int is_debugging;
+    int is_paused;
 
     size_t (*transport_read)(void *udata, char* buffer, size_t length);
     size_t (*transport_write)(void *udata, const char* buffer, size_t length);
