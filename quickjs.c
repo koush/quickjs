@@ -50320,7 +50320,7 @@ JSDebuggerLocation js_debugger_current_location(JSContext *ctx) {
 }
 
 JSValue js_debugger_json_stringify(JSContext *ctx, JSValueConst value) {
-    JSValue args[] = {
+    JSValueConst args[] = {
         value,
         JS_UNDEFINED,
         JS_UNDEFINED,

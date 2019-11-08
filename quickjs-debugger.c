@@ -277,7 +277,6 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
 
         JSValue body = JS_NewObject(ctx);
         js_debugger_get_value(ctx, result, body, "result");
-        // JS_SetPropertyStr(ctx, body, "result", JS_ToString(ctx, result));
         js_debugger_get_variable_type(ctx, state, body, result);
         JS_FreeValue(ctx, result);
         js_transport_send_response(info, request, body);
