@@ -163,11 +163,7 @@ static void js_debugger_get_variable_type(JSContext *ctx,
     JS_SetPropertyStr(ctx, var, "variablesReference", JS_NewInt32(ctx, reference));
 }
 
-static JSValue js_debugger_get_variable(JSContext *ctx,
-    struct DebuggerSuspendedState *state,
-    JSValue var_name, JSValue var_val) {
-    JSValue var = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, var, "name", var_name);
+static void js_debugger_get_value(JSContext *ctx, JSValue var_val, JSValue var, const char *value_property) {
     // do not toString on Arrays, since that makes a giant string of all the elements.
     // todo: typed arrays?
     if (JS_IsArray(ctx, var_val)) {
@@ -177,13 +173,20 @@ static JSValue js_debugger_get_variable(JSContext *ctx,
         JS_FreeValue(ctx, length);
         char lenBuf[64];
         sprintf(lenBuf, "Array (%d)", len);
-        JS_SetPropertyStr(ctx, var, "value", JS_NewString(ctx, lenBuf));
+        JS_SetPropertyStr(ctx, var, value_property, JS_NewString(ctx, lenBuf));
         JS_SetPropertyStr(ctx, var, "indexedVariables", JS_NewInt32(ctx, len));
     }
     else {
-        JS_SetPropertyStr(ctx, var, "value", JS_ToString(ctx, var_val));
+        JS_SetPropertyStr(ctx, var, value_property, JS_ToString(ctx, var_val));
     }
+}
 
+static JSValue js_debugger_get_variable(JSContext *ctx,
+    struct DebuggerSuspendedState *state,
+    JSValue var_name, JSValue var_val) {
+    JSValue var = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, var, "name", var_name);
+    js_debugger_get_value(ctx, var_val, var, "value");
     js_debugger_get_variable_type(ctx, state, var, var_val);
     return var;
 }
@@ -273,7 +276,8 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
         JS_FreeValue(ctx, expression);
 
         JSValue body = JS_NewObject(ctx);
-        JS_SetPropertyStr(ctx, body, "result", JS_ToString(ctx, result));
+        js_debugger_get_value(ctx, result, body, "result");
+        // JS_SetPropertyStr(ctx, body, "result", JS_ToString(ctx, result));
         js_debugger_get_variable_type(ctx, state, body, result);
         JS_FreeValue(ctx, result);
         js_transport_send_response(info, request, body);
