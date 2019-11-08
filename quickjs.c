@@ -50393,18 +50393,19 @@ char* normalize_filename( const char* filename ) {
 	while( *filename ) {
 		if( *filename=='\\' || *filename=='/' ) {
 			*pf++ = '\\';
-			*pf++ = '\\';
+			//*pf++ = '\\';
 
 			while( *filename=='\\' || *filename=='/' ) {
 				filename++;
 			}
 		}
 		else {
-			*pf++ = *filename++;
+			*pf++ = tolower(*filename++);
 		}
 	}
 
 	*pf = 0;
+	
 	return _filename;
 }
 
@@ -50412,31 +50413,37 @@ int js_debugger_check_breakpoint(JSContext *ctx, uint32_t current_dirty) {
     JSValue path_data = JS_UNDEFINED;
     if (!ctx->current_stack_frame)
         return 0;
+
     JSObject *f = JS_VALUE_GET_OBJ(ctx->current_stack_frame->cur_func);
     if (!f || !js_class_has_bytecode(f->class_id))
         return 0;
+
     JSFunctionBytecode *b = f->u.func.function_bytecode;
-    if (!b->has_debug || !b->debug.filename)
+    if (!b->has_debug || !b->debug.filename) {
         return 0;
+	}
 
 	// check if up to date
-    if (b->debugger.dirty == current_dirty)
+    if (b->debugger.dirty == current_dirty) {
         goto done;
+	}
 
     // note the dirty value and mark as up to date
     uint32_t dirty = b->debugger.dirty;
     b->debugger.dirty = current_dirty;
 
-    const char *_filename = JS_AtomToCString(ctx, b->debug.filename);
-	printf( " checking %s\n", _filename );
+    const char* filename = JS_AtomToCString(ctx, b->debug.filename);
+	printf( " checking %s\n", filename );
 
-	const char* filename = normalize_filename( _filename );
+	const char* _filename = normalize_filename( filename );
+	printf( " normalized %s\n", _filename );
     
-
-    path_data = js_debugger_file_breakpoints(ctx, filename);
+    path_data = js_debugger_file_breakpoints(ctx, _filename);
     JS_FreeCString(ctx, filename);
-    if (JS_IsUndefined(path_data))
+    if (JS_IsUndefined(path_data)) {
+		printf( "not found\n" );
         goto done;
+	}
 
     JSValue path_dirty_value = JS_GetPropertyStr(ctx, path_data, "dirty");
     uint32_t path_dirty;
