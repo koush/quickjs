@@ -106,9 +106,9 @@ void js_debugger_connect(JSContext *ctx, char *address) {
     assert(host);
     struct sockaddr_in addr;
 
-    bzero(&addr, sizeof(addr));
+    memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    bcopy((char *)host->h_addr, (char *)&addr.sin_addr.s_addr, host->h_length);
+    memcpy((char *)&addr.sin_addr.s_addr, (char *)host->h_addr, host->h_length);
     addr.sin_port = htons(port);
 
     assert(!connect(client, (const struct sockaddr *)&addr, sizeof(addr)));
