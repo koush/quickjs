@@ -50387,7 +50387,7 @@ JSValue js_debugger_build_backtrace(JSContext *ctx)
 }
 
 char* normalize_filename( const char* filename ) {
-	static char _filename[512];
+	static char _filename[1024];
 	char* pf = _filename;
 
 	while( *filename ) {
@@ -50433,11 +50433,8 @@ int js_debugger_check_breakpoint(JSContext *ctx, uint32_t current_dirty) {
     b->debugger.dirty = current_dirty;
 
     const char* filename = JS_AtomToCString(ctx, b->debug.filename);
-	printf( " checking %s\n", filename );
-
 	const char* _filename = normalize_filename( filename );
-	printf( " normalized %s\n", _filename );
-    
+	
     path_data = js_debugger_file_breakpoints(ctx, _filename);
     JS_FreeCString(ctx, filename);
     if (JS_IsUndefined(path_data)) {
