@@ -4,6 +4,10 @@
 #include "quickjs.h"
 #include <time.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct JSDebuggerFunctionInfo {
     // same length as byte_code_buf.
     uint8_t *breakpoints;
@@ -90,5 +94,9 @@ JSValue js_debugger_closure_variables(JSContext *ctx, int stack_index);
 JSValue js_debugger_evaluate(JSContext *ctx, int stack_index, JSValue expression);
 
 // end internal api functions
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
