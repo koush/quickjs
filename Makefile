@@ -26,9 +26,9 @@ ifeq ($(shell uname -s),Darwin)
 CONFIG_DARWIN=y
 endif
 # Windows cross compilation from Linux
-#CONFIG_WIN32=y
+CONFIG_WIN32=y
 # use link time optimization (smaller and faster executables but slower build)
-CONFIG_LTO=y
+CONFIG_LTO=n
 # consider warnings as errors (for development)
 #CONFIG_WERROR=y
 # force 32 bit build for some utilities
@@ -51,7 +51,7 @@ prefix=/usr/local
 OBJDIR=.obj
 
 ifdef CONFIG_WIN32
-  CROSS_PREFIX=i686-w64-mingw32-
+  CROSS_PREFIX=
   EXE=.exe
 else
   CROSS_PREFIX=
@@ -83,11 +83,11 @@ else
   CC=$(CROSS_PREFIX)gcc
   CFLAGS=-g -Wall -MMD -MF $(OBJDIR)/$(@F).d
   CFLAGS += -Wno-array-bounds -Wno-format-truncation
-  ifdef CONFIG_LTO
-    AR=$(CROSS_PREFIX)gcc-ar
-  else
+#  ifdef CONFIG_LTO
+#    AR=$(CROSS_PREFIX)gcc-ar
+#  else
     AR=$(CROSS_PREFIX)ar
-  endif
+#  endif
 endif
 STRIP=$(CROSS_PREFIX)strip
 ifdef CONFIG_WERROR
@@ -100,11 +100,13 @@ CFLAGS_SMALL=$(CFLAGS) -Os
 CFLAGS_OPT=$(CFLAGS) -O2
 CFLAGS_NOLTO:=$(CFLAGS_OPT)
 LDFLAGS=-g
+
 ifdef CONFIG_LTO
-CFLAGS_SMALL+=-flto
-CFLAGS_OPT+=-flto
-LDFLAGS+=-flto
+#CFLAGS_SMALL+=-flto
+#CFLAGS_OPT+=-flto
+#LDFLAGS+=-flto
 endif
+
 ifdef CONFIG_PROFILE
 CFLAGS+=-p
 LDFLAGS+=-p
@@ -119,7 +121,8 @@ else
 LDEXPORT=-rdynamic
 endif
 
-PROGS=qjs$(EXE) qjsbn$(EXE) qjsc$(EXE) qjsbnc$(EXE) run-test262 run-test262-bn
+PROGS=qjs-debug$(EXE) #qjsbn$(EXE) qjsc$(EXE) qjsbnc$(EXE) run-test262 run-test262-bn
+
 ifneq ($(CROSS_PREFIX),)
 QJSC_CC=gcc
 QJSC=./host-qjsc
@@ -130,15 +133,19 @@ QJSC_CC=$(CC)
 QJSC=./qjsc$(EXE)
 QJSBNC=./qjsbnc$(EXE)
 endif
+
 ifndef CONFIG_WIN32
-PROGS+=qjscalc
+#PROGS+=qjscalc
 endif
+
 ifdef CONFIG_M32
-PROGS+=qjs32 qjs32_s qjsbn32
+#PROGS+=qjs32 qjs32_s qjsbn32
 endif
-PROGS+=libquickjs.a libquickjs.bn.a
+
+PROGS+=libquickjs.a #libquickjs.bn.a
+
 ifdef CONFIG_LTO
-PROGS+=libquickjs.lto.a libquickjs.bn.lto.a
+#PROGS+=libquickjs.lto.a libquickjs.bn.lto.a
 endif
 
 # examples
@@ -146,9 +153,9 @@ ifeq ($(CROSS_PREFIX),)
 ifdef CONFIG_ASAN
 PROGS+=
 else
-PROGS+=examples/hello examples/hello_module examples/test_fib
+#PROGS+=examples/hello examples/hello_module examples/test_fib
 ifndef CONFIG_DARWIN
-PROGS+=examples/fib.so examples/point.so
+#PROGS+=examples/fib.so examples/point.so
 endif
 endif
 endif
@@ -172,6 +179,8 @@ QJSBN_OBJS=$(OBJDIR)/qjs.bn.o $(OBJDIR)/repl-bn.bn.o $(OBJDIR)/qjscalc.bn.o $(QJ
 LIBS=-lm
 ifndef CONFIG_WIN32
 LIBS+=-ldl
+else 
+LIBS+=-lWs2_32
 endif
 
 $(OBJDIR):
@@ -203,8 +212,9 @@ endif #CROSS_PREFIX
 
 QJSC_DEFINES:=-DCONFIG_CC=\"$(QJSC_CC)\" -DCONFIG_PREFIX=\"$(prefix)\"
 ifdef CONFIG_LTO
-QJSC_DEFINES+=-DCONFIG_LTO
+#QJSC_DEFINES+=-DCONFIG_LTO
 endif
+
 QJSC_HOST_DEFINES:=-DCONFIG_CC=\"$(HOST_CC)\" -DCONFIG_PREFIX=\"$(prefix)\"
 
 $(OBJDIR)/qjsc.o $(OBJDIR)/qjsc.bn.o: CFLAGS+=$(QJSC_DEFINES)
@@ -230,7 +240,7 @@ qjsbn-debug$(EXE): $(patsubst %.o, %.debug.o, $(QJSBN_OBJS))
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 ifdef CONFIG_LTO
-LTOEXT=.lto
+#LTOEXT=.lto
 else
 LTOEXT=
 endif

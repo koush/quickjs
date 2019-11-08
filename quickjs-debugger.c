@@ -1,11 +1,16 @@
 #include "quickjs-debugger.h"
 #include <time.h>
 #include <math.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <sys/socket.h>
+#include <netinet/in.h>
+#endif
 
 typedef struct DebuggerSuspendedState {
     uint32_t variable_reference_count;
@@ -13,8 +18,8 @@ typedef struct DebuggerSuspendedState {
     JSValue variable_pointers;
 } DebuggerSuspendedState;
 
-static char *debug_address = NULL;
-static int need_load_debug_address = 1;
+static char *debug_address = "127.0.0.1:5555";
+static int need_load_debug_address = 0;
 
 
 static char* js_get_debug_address() {
@@ -389,6 +394,7 @@ static void js_process_breakpoints(JSDebuggerInfo *info, JSValue message) {
 
     if (!JS_IsUndefined(path_data))
         JS_FreeValue(ctx, path_data);
+
     // use an object to store the breakpoints as a sparse array, basically.
     // this will get resolved into a pc array mirror when its detected as dirty.
     path_data = JS_NewObject(ctx);
@@ -425,12 +431,14 @@ static int js_process_debugger_messages(JSDebuggerInfo *info) {
 
         // length prefix is 8 hex followed by newline = 012345678\n
 		// not efficient, but protocol is then human readable.
-        if (!js_transport_read_fully(info, message_length_buf, 9))
-            goto done;
+        if (!js_transport_read_fully(info, message_length_buf, 9)) {
+			goto done;
+		}
 
         message_length_buf[8] = '\0';
         int message_length = strtol(message_length_buf, NULL, 16);
         assert(message_length > 0);
+
         if (message_length > info->message_buffer_length) {
             if (info->message_buffer) {
                 js_free(ctx, info->message_buffer);
@@ -446,6 +454,8 @@ static int js_process_debugger_messages(JSDebuggerInfo *info) {
             goto done;
         
         info->message_buffer[message_length] = '\0';
+		printf( "msg: %s\n",info->message_buffer );
+
 
         JSValue message = JS_ParseJSON(ctx, info->message_buffer, message_length, "<debugger>");
         const char *type = JS_ToCString(ctx, JS_GetPropertyStr(ctx, message, "type"));
@@ -504,17 +514,22 @@ void js_debugger_check(JSContext* ctx) {
             js_debugger_connect(ctx, address);
     }
 
-    if (info->transport_close == NULL)
+    if (info->transport_close == NULL) {
         goto done;
+	}
 
+	printf( "checking BP\n" );
     int at_breakpoint = js_debugger_check_breakpoint(ctx, info->breakpoints_dirty_counter);
+	
     if (at_breakpoint) {
+		printf( "at bp" );
         // reaching a breakpoint resets any existing stepping.
         info->stepping = 0;
         info->is_paused = 1;
         js_send_stopped_event(info, "breakpoint");
     }
     else if (info->stepping) {
+		printf( "stepping" );
         if (info->stepping == JS_DEBUGGER_STEP_IN) {
             int depth = js_debugger_stack_depth(ctx);
             // break if the stack is deeper
@@ -556,29 +571,36 @@ void js_debugger_check(JSContext* ctx) {
         }
     }
     else {
-        // only peek at the stream every now and then.
+		// only peek at the stream every now and then.
         if (info->peek_ticks++ < 10000)
             goto done;
 
         info->peek_ticks = 0;
-
         int peek = info->transport_peek(info->transport_udata);
+		printf( "peek: %d", peek );
+        
         if (peek < 0)
             goto fail;
+
         if (peek == 0)
             goto done;
     }
 
+	printf( "check" );
     if (js_process_debugger_messages(info))
         goto done;
 
     fail: 
-        js_debugger_free(ctx, info);
+		js_debugger_free(ctx, info);
+
     done:
         info->is_debugging = 0;
 }
 
 void js_debugger_free(JSContext *ctx, JSDebuggerInfo *info) {
+
+	printf( "closing debugger\n" );
+
     if (!info->transport_close)
         return;
 

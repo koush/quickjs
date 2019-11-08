@@ -4,33 +4,15 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-        {
-            "name": "(lldb) Attach",
-            "type": "cppdbg",
-            "request": "attach",
-            "program": "${workspaceFolder}/qjs-debug",
-            "processId": "${command:pickProcess}",
-            "MIMode": "lldb"
-        },
-        {
-            "name": "(lldb) Launch",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/qjs-debug",
-            "args": [
-                "test.js"
-            ],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [
-                {
-                    "name": "QUICKJS_DEBUG_ADDRESS",
-                    "value": "192.168.2.7:5555"
-                }
-            ],
-            "externalConsole": true,
-            "MIMode": "lldb",
-            "preLaunchTask": "make qjs-debug",
-        }
+		{
+			"type": "gdb",
+			"request": "launch",
+			"name": "Launch Program",
+			"target": "${workspaceFolder}/qjs-debug.exe",
+			"cwd": "${workspaceRoot}",
+			"arguments": "test.js",
+			"valuesFormatting": "parseText",
+			"stopAtEntry": true
+		}
     ]
 }

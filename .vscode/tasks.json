@@ -3,10 +3,14 @@
     // for the documentation about the tasks.json format
     "version": "2.0.0",
     "tasks": [
-        {
-            "label": "make qjs-debug",
-            "type": "shell",
-            "command": "make -j32 qjs-debug"
-        }
-    ]
+		{
+			"label": "make qjs-debug",
+			"type": "shell",
+			"command": "make -j32 qjs-debug.exe",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		}
+	]
 }
