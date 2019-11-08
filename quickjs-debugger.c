@@ -454,8 +454,7 @@ static int js_process_debugger_messages(JSDebuggerInfo *info) {
             goto done;
         
         info->message_buffer[message_length] = '\0';
-		printf( "msg: %s\n",info->message_buffer );
-
+		//printf( "msg: %s\n",info->message_buffer );
 
         JSValue message = JS_ParseJSON(ctx, info->message_buffer, message_length, "<debugger>");
         const char *type = JS_ToCString(ctx, JS_GetPropertyStr(ctx, message, "type"));
@@ -518,18 +517,18 @@ void js_debugger_check(JSContext* ctx) {
         goto done;
 	}
 
-	printf( "checking BP\n" );
+	//printf( "checking BP\n" );
     int at_breakpoint = js_debugger_check_breakpoint(ctx, info->breakpoints_dirty_counter);
 	
     if (at_breakpoint) {
-		printf( "at bp" );
+		//printf( "at bp" );
         // reaching a breakpoint resets any existing stepping.
         info->stepping = 0;
         info->is_paused = 1;
         js_send_stopped_event(info, "breakpoint");
     }
     else if (info->stepping) {
-		printf( "stepping" );
+		//printf( "stepping" );
         if (info->stepping == JS_DEBUGGER_STEP_IN) {
             int depth = js_debugger_stack_depth(ctx);
             // break if the stack is deeper
@@ -577,7 +576,7 @@ void js_debugger_check(JSContext* ctx) {
 
         info->peek_ticks = 0;
         int peek = info->transport_peek(info->transport_udata);
-		printf( "peek: %d", peek );
+		//printf( "peek: %d", peek );
         
         if (peek < 0)
             goto fail;
@@ -586,8 +585,7 @@ void js_debugger_check(JSContext* ctx) {
             goto done;
     }
 
-	printf( "check" );
-    if (js_process_debugger_messages(info))
+	if (js_process_debugger_messages(info))
         goto done;
 
     fail: 
@@ -599,8 +597,7 @@ void js_debugger_check(JSContext* ctx) {
 
 void js_debugger_free(JSContext *ctx, JSDebuggerInfo *info) {
 
-	printf( "closing debugger\n" );
-
+	//printf( "closing debugger\n" );
     if (!info->transport_close)
         return;
 

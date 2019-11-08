@@ -50438,8 +50438,7 @@ int js_debugger_check_breakpoint(JSContext *ctx, uint32_t current_dirty) {
     path_data = js_debugger_file_breakpoints(ctx, _filename);
     JS_FreeCString(ctx, filename);
     if (JS_IsUndefined(path_data)) {
-		printf( "not found\n" );
-        goto done;
+		goto done;
 	}
 
     JSValue path_dirty_value = JS_GetPropertyStr(ctx, path_data, "dirty");
