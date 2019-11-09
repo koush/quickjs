@@ -1061,6 +1061,19 @@ JS_BOOL JS_IsNumber(JSValueConst v)
 #endif
 }
 
+JS_BOOL JS_IsArrayBuffer(JSValueConst v)
+{
+    JSObject *p;
+    if (JS_VALUE_GET_TAG(v) != JS_TAG_OBJECT)
+        return FALSE;
+    p = JS_VALUE_GET_OBJ(v);
+    if (p->class_id != JS_CLASS_ARRAY_BUFFER &&
+        p->class_id != JS_CLASS_SHARED_ARRAY_BUFFER) {
+        return FALSE;
+    }
+    return TRUE;
+}
+
 static void js_trigger_gc(JSRuntime *rt, size_t size)
 {
     BOOL force_gc;
@@ -2593,7 +2606,7 @@ static void __JS_FreeAtom(JSRuntime *rt, uint32_t i)
 }
 
 /* Warning: 'p' is freed */
-static JSAtom JS_NewAtomStr(JSContext *ctx, JSString *p)
+static JSAtom JS_NewAtomStr2(JSContext *ctx, JSString *p, int type)
 {
     JSRuntime *rt = ctx->rt;
     uint32_t n;
@@ -2604,22 +2617,37 @@ static JSAtom JS_NewAtomStr(JSContext *ctx, JSString *p)
         }
     }
     /* XXX: should generate an exception */
-    return __JS_NewAtom(rt, p, JS_ATOM_TYPE_STRING);
+    return __JS_NewAtom(rt, p, type);
 }
 
-JSAtom JS_NewAtomLen(JSContext *ctx, const char *str, size_t len)
+static JSAtom JS_NewAtomStr(JSContext *ctx, JSString *p)
+{
+    return JS_NewAtomStr2(ctx, p, JS_ATOM_TYPE_STRING);
+}
+
+static JSAtom JS_NewAtomLen2(JSContext *ctx, const char *str, size_t len, int type)
 {
     JSValue val;
 
     if (len == 0 || !is_digit(*str)) {
-        JSAtom atom = __JS_FindAtom(ctx->rt, str, len, JS_ATOM_TYPE_STRING);
+        JSAtom atom = __JS_FindAtom(ctx->rt, str, len, type);
         if (atom)
             return atom;
     }
     val = JS_NewStringLen(ctx, str, len);
     if (JS_IsException(val))
         return JS_ATOM_NULL;
-    return JS_NewAtomStr(ctx, JS_VALUE_GET_STRING(val));
+    return JS_NewAtomStr2(ctx, JS_VALUE_GET_STRING(val), type);
+}
+
+JSAtom JS_NewAtomLen(JSContext *ctx, const char *str, size_t len)
+{
+    return JS_NewAtomLen2(ctx, str, len, JS_ATOM_TYPE_STRING);
+}
+
+JSAtom JS_NewAtomLenPrivate(JSContext *ctx, const char *str, size_t len)
+{
+    return JS_NewAtomLen2(ctx, str, len, JS_ATOM_TYPE_PRIVATE);
 }
 
 JSAtom JS_NewAtom(JSContext *ctx, const char *str)
