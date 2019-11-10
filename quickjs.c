@@ -50512,35 +50512,6 @@ done:
     return b->debugger.breakpoints[pc];
 }
 
-static void js_debugger_enumerate_global_variables(JSContext *ctx, JSValue ret, JSValue global_obj) {
-    JSValue globals = globals =
-        JS_GetOwnPropertyNames2(ctx, global_obj, JS_GPN_STRING_MASK, JS_ITERATOR_KIND_KEY_AND_VALUE);
-    uint32_t globals_len = 0;
-    if (!js_get_length32(ctx, &globals_len, globals)) {
-        for (int i = 0; i < globals_len; i++) {
-            JSValue global = JS_GetPropertyUint32(ctx, globals, i);
-            JSValue key = JS_GetPropertyUint32(ctx, global, 0);
-            JSValue value = JS_GetPropertyUint32(ctx, global, 1);
-            JS_FreeValue(ctx, global);
-
-            const char* key_string = JS_ToCString(ctx, key);
-            JS_SetPropertyStr(ctx, ret, key_string, value);
-            JS_FreeCString(ctx, key_string);
-            JS_FreeValue(ctx, key);
-        }
-    }
-    JS_FreeValue(ctx, globals);
-}
-
-JSValue js_debugger_global_variables(JSContext *ctx) {
-    JSValue ret = JS_NewObject(ctx);
-
-    js_debugger_enumerate_global_variables(ctx, ret, ctx->global_obj);
-    js_debugger_enumerate_global_variables(ctx, ret, ctx->global_var_obj);
-
-    return ret;
-}
-
 JSValue js_debugger_local_variables(JSContext *ctx, int stack_index) {
     JSValue ret = JS_NewObject(ctx);
 

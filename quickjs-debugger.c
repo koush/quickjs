@@ -128,8 +128,9 @@ static JSValue js_get_scopes(JSContext *ctx, int frame) {
 }
 
 static void js_debugger_get_variable_type(JSContext *ctx,
-    struct DebuggerSuspendedState *state,
-    JSValue var, JSValue var_val) {
+        struct DebuggerSuspendedState *state,
+        JSValue var, JSValue var_val) {
+
     // 0 means not expandible
     uint32_t reference = 0;
     if (JS_IsString(var_val))
@@ -156,8 +157,9 @@ static void js_debugger_get_variable_type(JSContext *ctx,
             JS_SetPropertyUint32(ctx, state->variable_references, reference, JS_DupValue(ctx, var_val));
             JS_SetPropertyUint32(ctx, state->variable_pointers, pl, JS_NewInt32(ctx, reference));
         }
-        else
+        else {
             JS_ToUint32(ctx, &reference, found);
+        }
         JS_FreeValue(ctx, found);
     }
     JS_SetPropertyStr(ctx, var, "variablesReference", JS_NewInt32(ctx, reference));
@@ -311,7 +313,7 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
             assert(frame < js_debugger_stack_depth(ctx));
 
             if (scope == 0)
-                variable = js_debugger_global_variables(ctx);
+                variable = JS_GetGlobalObject(ctx);
             else if (scope == 1)
                 variable = js_debugger_local_variables(ctx, frame);
             else if (scope == 2)
@@ -355,7 +357,7 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
     unfiltered:
 
         if (!JS_GetOwnPropertyNames(ctx, &tab_atom, &tab_atom_count, variable,
-            JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY)) {
+            JS_GPN_STRING_MASK | JS_GPN_SYMBOL_MASK)) {
 
             for(int i = 0; i < tab_atom_count; i++) {
                 JSValue value = JS_GetProperty(ctx, variable, tab_atom[i].atom);
