@@ -86,7 +86,6 @@ int js_debugger_check_breakpoint(JSContext *ctx, uint32_t current_dirty);
 // could also be implemented by constructing an eval call. clunky.
 JSValue js_debugger_json_stringify(JSContext *ctx, JSValueConst value);
 
-JSValue js_debugger_global_variables(JSContext *ctx);
 JSValue js_debugger_local_variables(JSContext *ctx, int stack_index);
 JSValue js_debugger_closure_variables(JSContext *ctx, int stack_index);
 
