@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <poll.h>
+#include <arpa/inet.h>
 
 struct js_transport_data {
     int handle;
@@ -89,15 +90,14 @@ static void js_transport_close(JSContext* ctx, void *udata) {
     free(udata);
 }
 
-void js_debugger_connect(JSContext *ctx, char *address) {
+// todo: fixup asserts to return errors.
+static struct sockaddr_in js_debugger_parse_sockaddr(const char* address) {
     char* port_string = strstr(address, ":");
     assert(port_string);
 
     int port = atoi(port_string + 1);
     assert(port);
 
-    int client = socket(AF_INET, SOCK_STREAM, 0);
-    assert(client > 0);
     char host_string[256];
     strcpy(host_string, address);
     host_string[port_string - address] = 0;
@@ -111,9 +111,43 @@ void js_debugger_connect(JSContext *ctx, char *address) {
     memcpy((char *)&addr.sin_addr.s_addr, (char *)host->h_addr, host->h_length);
     addr.sin_port = htons(port);
 
+    return addr;
+}
+
+void js_debugger_connect(JSContext *ctx, const char *address) {
+    struct sockaddr_in addr = js_debugger_parse_sockaddr(address);
+
+    int client = socket(AF_INET, SOCK_STREAM, 0);
+    assert(client > 0);
+
     assert(!connect(client, (const struct sockaddr *)&addr, sizeof(addr)));
 
     struct js_transport_data *data = (struct js_transport_data *)malloc(sizeof(struct js_transport_data));
+    memset(data, 0, sizeof(js_transport_data));
+    data->handle = client;
+    js_debugger_attach(ctx, js_transport_read, js_transport_write, js_transport_peek, js_transport_close, data);
+}
+
+void js_debugger_wait_connection(JSContext *ctx, const char* address) {
+    struct sockaddr_in addr = js_debugger_parse_sockaddr(address);
+
+    int server_sock = socket(AF_INET, SOCK_STREAM, 0);
+    assert(server_sock >= 0);
+
+    int reuseAddress = 1;
+    assert(setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, (const char *) &reuseAddress, sizeof(reuseAddress)) >= 0);
+
+    assert(bind(server_sock, (struct sockaddr *) &addr, sizeof(addr)) >= 0);
+
+    listen(server_sock, 1);
+
+    struct sockaddr_in client_addr;
+    socklen_t client_addr_size = (socklen_t) sizeof(addr);
+    int client = accept(server_sock, (struct sockaddr *) &client_addr, &client_addr_size);
+    assert(client >= 0);
+
+    struct js_transport_data *data = (struct js_transport_data *)malloc(sizeof(struct js_transport_data));
+    memset(data, 0, sizeof(js_transport_data));
     data->handle = client;
     js_debugger_attach(ctx, js_transport_read, js_transport_write, js_transport_peek, js_transport_close, data);
 }

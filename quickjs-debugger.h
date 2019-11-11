@@ -29,6 +29,7 @@ typedef struct JSDebuggerInfo {
     JSContext *ctx;
  
     int attempted_connect;
+    int attempted_wait;
     int peek_ticks;
     char *message_buffer;
     int message_buffer_length;
@@ -61,7 +62,8 @@ void js_debugger_attach(
     void (*transport_close)(JSContext *ctx, void *udata),
     void *udata
 );
-void js_debugger_connect(JSContext *ctx, char *address);
+void js_debugger_connect(JSContext *ctx, const char *address);
+void js_debugger_wait_connection(JSContext *ctx, const char* address);
 
 JSValue js_debugger_file_breakpoints(JSContext *ctx, const char *path);
 
