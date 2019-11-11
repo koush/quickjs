@@ -622,3 +622,7 @@ void js_debugger_attach(
 
     js_process_debugger_messages(info);
 }
+
+int js_debugger_is_transport_connected(JSContext *ctx) {
+    return js_debugger_info(ctx)->transport_close != NULL;
+}
