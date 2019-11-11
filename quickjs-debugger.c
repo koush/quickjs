@@ -553,10 +553,11 @@ void js_debugger_check(JSContext* ctx) {
     }
     else {
         // only peek at the stream every now and then.
-        if (info->peek_ticks++ < 10000)
+        if (info->peek_ticks++ < 10000 && !info->should_peek)
             goto done;
 
         info->peek_ticks = 0;
+        info->should_peek = 0;
 
         int peek = info->transport_peek(info->transport_udata);
         if (peek < 0)
@@ -625,4 +626,8 @@ void js_debugger_attach(
 
 int js_debugger_is_transport_connected(JSContext *ctx) {
     return js_debugger_info(ctx)->transport_close != NULL;
+}
+
+void js_debugger_cooperate(JSContext *ctx) {
+    js_debugger_info(ctx)->should_peek = 1;
 }
