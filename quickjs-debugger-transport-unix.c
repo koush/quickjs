@@ -152,7 +152,3 @@ void js_debugger_wait_connection(JSContext *ctx, const char* address) {
     data->handle = client;
     js_debugger_attach(ctx, js_transport_read, js_transport_write, js_transport_peek, js_transport_close, data);
 }
-
-void js_debugger_cooperate(JSContext *ctx) {
-    js_debugger_info(ctx)->should_peek = 1;
-}
