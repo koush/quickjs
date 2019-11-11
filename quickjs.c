@@ -50537,9 +50537,9 @@ done:
     if (!b->debugger.breakpoints)
         return 0;
 
+    pc = ctx->current_stack_frame->cur_pc - b->byte_code_buf - 1;
     if (pc < 0 || pc > b->byte_code_len)
         return 0;
-    pc = ctx->current_stack_frame->cur_pc - b->byte_code_buf - 1;
     return b->debugger.breakpoints[pc];
 }
 
@@ -50682,7 +50682,7 @@ static JSValue js_debugger_eval(JSContext *ctx, JSValueConst this_obj, JSStackFr
     fd->arguments_allowed = b->arguments_allowed;
     fd->js_mode = js_mode;
     fd->func_name = JS_DupAtom(ctx, JS_ATOM__eval_);
-    if (b) {
+    if (b && b->vardefs[b->arg_count + scope_idx].scope_next != scope_idx) {
         if (add_closure_variables(ctx, fd, b, scope_idx))
             goto fail;
     }
