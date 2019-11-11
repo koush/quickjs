@@ -50537,6 +50537,8 @@ done:
     if (!b->debugger.breakpoints)
         return 0;
 
+    if (pc < 0 || pc > b->byte_code_len)
+        return 0;
     pc = ctx->current_stack_frame->cur_pc - b->byte_code_buf - 1;
     return b->debugger.breakpoints[pc];
 }

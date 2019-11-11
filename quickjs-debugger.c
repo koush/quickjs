@@ -470,13 +470,15 @@ done:
 
 void js_debugger_exception(JSContext *ctx) {
     JSDebuggerInfo *info = js_debugger_info(ctx);
-    if (info->is_debugging)
-        return;
     if (!info->exception_breakpoint)
         return;
+    if (info->is_debugging)
+        return;
+    info->is_debugging = 1;
     js_send_stopped_event(info, "exception");
     info->is_paused = 1;
     js_process_debugger_messages(info);
+    info->is_debugging = 0;
 }
 
 // in thread check request/response of pending commands.
