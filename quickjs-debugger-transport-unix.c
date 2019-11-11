@@ -131,19 +131,20 @@ void js_debugger_connect(JSContext *ctx, const char *address) {
 void js_debugger_wait_connection(JSContext *ctx, const char* address) {
     struct sockaddr_in addr = js_debugger_parse_sockaddr(address);
 
-    int server_sock = socket(AF_INET, SOCK_STREAM, 0);
-    assert(server_sock >= 0);
+    int server = socket(AF_INET, SOCK_STREAM, 0);
+    assert(server >= 0);
 
     int reuseAddress = 1;
-    assert(setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, (const char *) &reuseAddress, sizeof(reuseAddress)) >= 0);
+    assert(setsockopt(server, SOL_SOCKET, SO_REUSEADDR, (const char *) &reuseAddress, sizeof(reuseAddress)) >= 0);
 
-    assert(bind(server_sock, (struct sockaddr *) &addr, sizeof(addr)) >= 0);
+    assert(bind(server, (struct sockaddr *) &addr, sizeof(addr)) >= 0);
 
-    listen(server_sock, 1);
+    listen(server, 1);
 
     struct sockaddr_in client_addr;
     socklen_t client_addr_size = (socklen_t) sizeof(addr);
-    int client = accept(server_sock, (struct sockaddr *) &client_addr, &client_addr_size);
+    int client = accept(server, (struct sockaddr *) &client_addr, &client_addr_size);
+    close(server);
     assert(client >= 0);
 
     struct js_transport_data *data = (struct js_transport_data *)malloc(sizeof(struct js_transport_data));
