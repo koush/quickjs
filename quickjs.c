@@ -317,7 +317,9 @@ typedef struct JSBigFloat {
 struct JSContext {
     JSRuntime *rt;
     struct list_head link;
+#if !defined(__APPLE__) && !defined(__linux__)
     const uint8_t *stack_top;
+#endif
     size_t stack_size; /* in bytes */
 
     JSValue current_exception;
@@ -1794,10 +1796,29 @@ static inline uint8_t *js_get_stack_pointer(void)
     return __builtin_frame_address(0);
 }
 
+#if !defined(__APPLE__) && !defined(__linux__)
+static inline void js_initialize_stack_top(JSContext *ctx) {
+    ctx->stack_top = js_get_stack_pointer();
+}
+static inline js_get_stack_top(JSContext *ctx) {
+    return ctx->stack_top;
+}
+#else
+static __thread uint8_t *js_stack_top = NULL;
+static inline void js_initialize_stack_top(JSContext *ctx) {
+    if (js_stack_top == NULL)
+        js_stack_top = js_get_stack_pointer();
+}
+static inline uint8_t *js_get_stack_top() {
+    return js_stack_top;
+}
+#endif
+
+
 static inline BOOL js_check_stack_overflow(JSContext *ctx, size_t alloca_size)
 {
     size_t size;
-    size = ctx->stack_top - js_get_stack_pointer();
+    size = js_get_stack_top() - js_get_stack_pointer();
     return unlikely((size + alloca_size) > ctx->stack_size);
 }
 #endif
@@ -1818,7 +1839,7 @@ JSContext *JS_NewContextRaw(JSRuntime *rt)
     }
     ctx->rt = rt;
     list_add_tail(&ctx->link, &rt->context_list);
-    ctx->stack_top = js_get_stack_pointer();
+    js_initialize_stack_top(ctx);
     ctx->stack_size = JS_DEFAULT_STACK_SIZE;
     ctx->current_exception = JS_NULL;
 #ifdef CONFIG_BIGNUM
