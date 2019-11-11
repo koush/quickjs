@@ -13,7 +13,7 @@
             "MIMode": "lldb"
         },
         {
-            "name": "(lldb) Launch",
+            "name": "Launch (connect)",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/qjs-debug",
@@ -25,12 +25,31 @@
             "environment": [
                 {
                     "name": "QUICKJS_DEBUG_ADDRESS",
-                    "value": "192.168.2.7:5555"
+                    "value": "127.0.0.1:5555"
+                }
+            ],
+            "externalConsole": true,
+            "MIMode": "lldb",
+            "preLaunchTask": "make qjs-debug",
+        },
+        {
+            "name": "Launch (listen)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/qjs-debug",
+            "args": [
+                "test.js"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "QUICKJS_DEBUG_LISTEN_ADDRESS",
+                    "value": "127.0.0.1:5555"
                 }
             ],
             "externalConsole": true,
             "MIMode": "lldb",
             "preLaunchTask": "make qjs-debug",
         }
-    ]
 }

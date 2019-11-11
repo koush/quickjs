@@ -13,18 +13,6 @@ typedef struct DebuggerSuspendedState {
     JSValue variable_pointers;
 } DebuggerSuspendedState;
 
-static char *debug_address = NULL;
-static int need_load_debug_address = 1;
-
-
-static char* js_get_debug_address() {
-    if (!need_load_debug_address) {
-        return debug_address;
-    }
-
-    return debug_address = getenv("QUICKJS_DEBUG_ADDRESS");
-}
-
 static int js_transport_read_fully(JSDebuggerInfo *info, char *buffer, size_t length) {
     int offset = 0;
     while (offset < length) {
@@ -501,9 +489,15 @@ void js_debugger_check(JSContext* ctx) {
 
     if (!info->attempted_connect) {
         info->attempted_connect = 1;
-        char *address = js_get_debug_address();
+        char *address = getenv("QUICKJS_DEBUG_ADDRESS");
         if (address != NULL && !info->transport_close)
             js_debugger_connect(ctx, address);
+    }
+    else if (!info->attempted_wait) {
+        info->attempted_wait = 1;
+        char *address = getenv("QUICKJS_DEBUG_LISTEN_ADDRESS");
+        if (address != NULL && !info->transport_close)
+            js_debugger_wait_connection(ctx, address);
     }
 
     if (info->transport_close == NULL)
@@ -583,6 +577,10 @@ void js_debugger_check(JSContext* ctx) {
 void js_debugger_free(JSContext *ctx, JSDebuggerInfo *info) {
     if (!info->transport_close)
         return;
+
+    // don't use the JSContext because it might be in a funky state during teardown.
+    const char* terminated = "{\"type\":\"event\",\"event\":{\"type\":\"terminated\"}}";
+    js_transport_write_message_newline(info, terminated, strlen(terminated));
 
     info->transport_close(ctx, info->transport_udata);
 
