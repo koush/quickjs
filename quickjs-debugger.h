@@ -31,6 +31,7 @@ typedef struct JSDebuggerInfo {
     int attempted_connect;
     int attempted_wait;
     int peek_ticks;
+    int should_peek;
     char *message_buffer;
     int message_buffer_length;
     int is_debugging;
@@ -67,8 +68,7 @@ void js_debugger_wait_connection(JSContext *ctx, const char* address);
 int js_debugger_is_transport_connected(JSContext *ctx);
 
 JSValue js_debugger_file_breakpoints(JSContext *ctx, const char *path);
-
-
+void js_debugger_cooperate(JSContext *ctx);
 
 // begin internal api functions
 // these functions all require access to quickjs internal structures.
