@@ -64,6 +64,7 @@ void js_debugger_attach(
 );
 void js_debugger_connect(JSContext *ctx, const char *address);
 void js_debugger_wait_connection(JSContext *ctx, const char* address);
+int js_debugger_is_transport_connected(JSContext *ctx);
 
 JSValue js_debugger_file_breakpoints(JSContext *ctx, const char *path);
 
