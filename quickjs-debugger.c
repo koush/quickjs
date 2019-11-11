@@ -561,11 +561,18 @@ void js_debugger_check(JSContext* ctx) {
         info->peek_ticks = 0;
         info->should_peek = 0;
 
-        int peek = info->transport_peek(info->transport_udata);
-        if (peek < 0)
-            goto fail;
-        if (peek == 0)
-            goto done;
+        // continue peek/reading until there's nothing left.
+        // breakpoints may arrive outside of a debugger pause.
+        // once paused, fall through to handle the pause.
+        while (!info->is_paused) {
+            int peek = info->transport_peek(info->transport_udata);
+            if (peek < 0)
+                goto fail;
+            if (peek == 0)
+                goto done;
+            if (!js_process_debugger_messages(info))
+                goto fail;
+        }
     }
 
     if (js_process_debugger_messages(info))
