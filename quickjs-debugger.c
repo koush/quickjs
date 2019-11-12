@@ -61,7 +61,6 @@ static int js_transport_write_value(JSDebuggerInfo *info, JSValue value) {
     if (len)
         ret = js_transport_write_message_newline(info, str, len);
     // else send error somewhere?
-    int ret = js_transport_write_message_newline(info, str, len);
     JS_FreeCString(info->ctx, str);
     JS_FreeValue(info->ctx, stringified);
     JS_FreeValue(info->ctx, value);
@@ -572,7 +571,7 @@ void js_debugger_check(JSContext* ctx, const uint8_t *cur_pc) {
             info->is_paused = 1;
             js_send_stopped_event(info, "stepOut");
         }
-        else if (info->stepping == JS_DEBUGGER_STEP_OUT) {
+        else if (info->stepping == JS_DEBUGGER_STEP) {
             struct JSDebuggerLocation location = js_debugger_current_location(ctx, cur_pc);
             // to step over, need to make sure the location changes,
             // and that the location change isn't into a function call (deeper stack).
