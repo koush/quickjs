@@ -13,12 +13,27 @@
             "MIMode": "lldb"
         },
         {
+            "name": "Launch",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/qjs-debug",
+            "args": [
+                "bug.js"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+
+            "externalConsole": true,
+            "MIMode": "lldb",
+            "preLaunchTask": "make qjs-debug",
+        },
+        {
             "name": "Launch (connect)",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/qjs-debug",
             "args": [
-                "test.js"
+                "bug.js"
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

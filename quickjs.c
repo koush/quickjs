@@ -14830,13 +14830,27 @@ static JSValue JS_CallInternal(JSContext *ctx, JSValueConst func_obj,
 #include "quickjs-opcode.h"
         [ OP_COUNT ... 255 ] = &&case_default
     };
-#define SWITCH(pc)      goto *dispatch_table[opcode = *pc++];
-#define CASE(op)        case_ ## op
+    static const void * const debugger_dispatch_table[256] = {
+#define DEF(id, size, n_pop, n_push, f) && case_debugger_OP_ ## id,
+#if SHORT_OPCODES
+#define def(id, size, n_pop, n_push, f)
+#else
+#define def(id, size, n_pop, n_push, f) && case_default,
+#endif
+#include "quickjs-opcode.h"
+        [ OP_COUNT ... 255 ] = &&case_default
+    };
+#define SWITCH(pc)      goto *active_dispatch_table[opcode = *pc++];
+#define CASE(op)        case_debugger_ ## op: js_debugger_check(ctx, pc); case_ ## op
 #define DEFAULT         case_default
 #define BREAK           SWITCH(pc)
 #endif
 
-    js_debugger_check(ctx);
+    const void * const * active_dispatch_table = ctx->debugger_info.transport_close
+        ? debugger_dispatch_table : dispatch_table;
+
+    js_debugger_check(ctx, NULL);
+
     if (js_poll_interrupts(ctx))
         return JS_EXCEPTION;
     if (unlikely(JS_VALUE_GET_TAG(func_obj) != JS_TAG_OBJECT)) {
@@ -50299,7 +50313,7 @@ void JS_AddIntrinsicTypedArrays(JSContext *ctx)
 #endif
 }
 
-JSDebuggerLocation js_debugger_current_location(JSContext *ctx) {
+JSDebuggerLocation js_debugger_current_location(JSContext *ctx, const uint8_t *cur_pc) {
     JSDebuggerLocation location;
     location.filename = 0;
     JSStackFrame *sf = ctx->current_stack_frame;
@@ -50314,8 +50328,10 @@ JSDebuggerLocation js_debugger_current_location(JSContext *ctx) {
     if (!b || !b->has_debug)
         return location;
 
-    location.line = find_line_num(ctx, b, sf->cur_pc - b->byte_code_buf - 1);
+    location.line = find_line_num(ctx, b, (cur_pc ? cur_pc : sf->cur_pc) - b->byte_code_buf - 1);
     location.filename = b->debug.filename;
+    // quickjs has no column info.
+    location.column = 0;
     return location;
 }
 
@@ -50342,7 +50358,7 @@ uint32_t js_debugger_stack_depth(JSContext *ctx) {
     return stack_index;
 }
 
-JSValue js_debugger_build_backtrace(JSContext *ctx)
+JSValue js_debugger_build_backtrace(JSContext *ctx, const uint8_t *cur_pc)
 {
     JSStackFrame *sf;
     const char *func_name_str;
@@ -50370,7 +50386,8 @@ JSValue js_debugger_build_backtrace(JSContext *ctx)
 
             b = p->u.func.function_bytecode;
             if (b->has_debug) {
-                line_num1 = find_line_num(ctx, b, sf->cur_pc - b->byte_code_buf - 1);
+                const uint8_t *pc = sf != ctx->current_stack_frame || !cur_pc ? sf->cur_pc : cur_pc;
+                line_num1 = find_line_num(ctx, b, pc - b->byte_code_buf - 1);
                 JS_SetPropertyStr(ctx, current_frame, "filename", JS_AtomToString(ctx, b->debug.filename));
                 if (line_num1 != -1)
                     JS_SetPropertyStr(ctx, current_frame, "line", JS_NewUint32(ctx, line_num1));
@@ -50383,7 +50400,7 @@ JSValue js_debugger_build_backtrace(JSContext *ctx)
     return ret;
 }
 
-int js_debugger_check_breakpoint(JSContext *ctx, uint32_t current_dirty) {
+int js_debugger_check_breakpoint(JSContext *ctx, uint32_t current_dirty, const uint8_t *cur_pc) {
     JSValue path_data = JS_UNDEFINED;
     if (!ctx->current_stack_frame)
         return 0;
@@ -50508,7 +50525,7 @@ done:
     if (!b->debugger.breakpoints)
         return 0;
 
-    pc = ctx->current_stack_frame->cur_pc - b->byte_code_buf - 1;
+    pc = (cur_pc ? cur_pc : ctx->current_stack_frame->cur_pc) - b->byte_code_buf - 1;
     if (pc < 0 || pc > b->byte_code_len)
         return 0;
     return b->debugger.breakpoints[pc];
