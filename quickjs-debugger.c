@@ -298,7 +298,8 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
             int frame = reference >> 2;
             int scope = reference % 4;
 
-            assert(frame < js_debugger_stack_depth(ctx));
+            if (frame >= js_debugger_stack_depth(ctx))
+                goto done;
 
             if (scope == 0)
                 variable = JS_GetGlobalObject(ctx);
@@ -307,7 +308,7 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
             else if (scope == 2)
                 variable = js_debugger_closure_variables(ctx, frame);
             else
-                assert(0);
+                goto done;
 
             // need to dupe the variable, as it's used below as well.
             JS_SetPropertyUint32(ctx, state->variable_references, reference, JS_DupValue(ctx, variable));
@@ -570,6 +571,7 @@ void js_debugger_check(JSContext* ctx) {
                 goto fail;
             if (peek == 0)
                 goto done;
+
             if (!js_process_debugger_messages(info))
                 goto fail;
         }
