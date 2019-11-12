@@ -57,8 +57,10 @@ static int js_transport_write_value(JSDebuggerInfo *info, JSValue value) {
     JSValue stringified = js_debugger_json_stringify(info->ctx, value);
     size_t len;
     const char* str = JS_ToCStringLen(info->ctx, &len, stringified);
-    assert(len);
-    // add a newline for human readability
+    int ret = 0;
+    if (len)
+        ret = js_transport_write_message_newline(info, str, len);
+    // else send error somewhere?
     int ret = js_transport_write_message_newline(info, str, len);
     JS_FreeCString(info->ctx, str);
     JS_FreeValue(info->ctx, stringified);
