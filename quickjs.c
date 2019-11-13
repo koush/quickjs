@@ -14878,8 +14878,6 @@ static JSValue JS_CallInternal(JSContext *ctx, JSValueConst func_obj,
     const void * const * active_dispatch_table = ctx->debugger_info.transport_close
         ? debugger_dispatch_table : dispatch_table;
 
-    js_debugger_check(ctx, NULL);
-
     if (js_poll_interrupts(ctx))
         return JS_EXCEPTION;
     if (unlikely(JS_VALUE_GET_TAG(func_obj) != JS_TAG_OBJECT)) {
@@ -14975,6 +14973,8 @@ static JSValue JS_CallInternal(JSContext *ctx, JSValueConst func_obj,
     for(;;) {
         int call_argc;
         JSValue *call_argv;
+
+        js_debugger_check(ctx, NULL);
 
         SWITCH(pc) {
         CASE(OP_push_i32):
