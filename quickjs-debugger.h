@@ -24,6 +24,7 @@ typedef struct JSDebuggerLocation {
 #define JS_DEBUGGER_STEP 1
 #define JS_DEBUGGER_STEP_IN 2
 #define JS_DEBUGGER_STEP_OUT 3
+#define JS_DEBUGGER_STEP_CONTINUE 4
 
 typedef struct JSDebuggerInfo {
     JSContext *ctx;
@@ -51,7 +52,7 @@ typedef struct JSDebuggerInfo {
     int step_depth;
 } JSDebuggerInfo;
 
-void js_debugger_check(JSContext *ctx);
+void js_debugger_check(JSContext *ctx, const uint8_t *pc);
 void js_debugger_exception(JSContext* ctx);
 void js_debugger_free(JSContext *ctx, JSDebuggerInfo *info);
 
@@ -78,12 +79,12 @@ JSDebuggerInfo *js_debugger_info(JSContext *ctx);
 // this may be able to be done with an Error backtrace,
 // but would be clunky and require stack string parsing.
 uint32_t js_debugger_stack_depth(JSContext *ctx);
-JSValue js_debugger_build_backtrace(JSContext *ctx);
-JSDebuggerLocation js_debugger_current_location(JSContext *ctx);
+JSValue js_debugger_build_backtrace(JSContext *ctx, const uint8_t *cur_pc);
+JSDebuggerLocation js_debugger_current_location(JSContext *ctx, const uint8_t *cur_pc);
 
 // checks to see if a breakpoint exists on the current pc.
 // calls back into js_debugger_file_breakpoints.
-int js_debugger_check_breakpoint(JSContext *ctx, uint32_t current_dirty);
+int js_debugger_check_breakpoint(JSContext *ctx, uint32_t current_dirty, const uint8_t *cur_pc);
 
 // could be moved out if js_json_stringify is made public.
 // could also be implemented by constructing an eval call. clunky.

@@ -11,6 +11,7 @@ typedef struct DebuggerSuspendedState {
     uint32_t variable_reference_count;
     JSValue variable_references;
     JSValue variable_pointers;
+    const uint8_t *cur_pc;
 } DebuggerSuspendedState;
 
 static int js_transport_read_fully(JSDebuggerInfo *info, char *buffer, size_t length) {
@@ -56,9 +57,10 @@ static int js_transport_write_value(JSDebuggerInfo *info, JSValue value) {
     JSValue stringified = js_debugger_json_stringify(info->ctx, value);
     size_t len;
     const char* str = JS_ToCStringLen(info->ctx, &len, stringified);
-    assert(len);
-    // add a newline for human readability
-    int ret = js_transport_write_message_newline(info, str, len);
+    int ret = 0;
+    if (len)
+        ret = js_transport_write_message_newline(info, str, len);
+    // else send error somewhere?
     JS_FreeCString(info->ctx, str);
     JS_FreeValue(info->ctx, stringified);
     JS_FreeValue(info->ctx, value);
@@ -224,6 +226,9 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
     JSValue command_property = JS_GetPropertyStr(ctx, request, "command");
     const char *command = JS_ToCString(ctx, command_property);
     if (strcmp("continue", command) == 0) {
+        info->stepping = JS_DEBUGGER_STEP_CONTINUE;
+        info->step_over = js_debugger_current_location(ctx, state->cur_pc);
+        info->step_depth = js_debugger_stack_depth(ctx);
         js_transport_send_response(info, request, JS_UNDEFINED);
         info->is_paused = 0;
     }
@@ -234,21 +239,21 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
     }
     else if (strcmp("next", command) == 0) {
         info->stepping = JS_DEBUGGER_STEP;
-        info->step_over = js_debugger_current_location(ctx);
+        info->step_over = js_debugger_current_location(ctx, state->cur_pc);
         info->step_depth = js_debugger_stack_depth(ctx);
         js_transport_send_response(info, request, JS_UNDEFINED);
         info->is_paused = 0;
     }
     else if (strcmp("stepIn", command) == 0) {
         info->stepping = JS_DEBUGGER_STEP_IN;
-        info->step_over = js_debugger_current_location(ctx);
+        info->step_over = js_debugger_current_location(ctx, state->cur_pc);
         info->step_depth = js_debugger_stack_depth(ctx);
         js_transport_send_response(info, request, JS_UNDEFINED);
         info->is_paused = 0;
     }
     else if (strcmp("stepOut", command) == 0) {
         info->stepping = JS_DEBUGGER_STEP_OUT;
-        info->step_over = js_debugger_current_location(ctx);
+        info->step_over = js_debugger_current_location(ctx, state->cur_pc);
         info->step_depth = js_debugger_stack_depth(ctx);
         js_transport_send_response(info, request, JS_UNDEFINED);
         info->is_paused = 0;
@@ -272,7 +277,7 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
         js_transport_send_response(info, request, body);
     }
     else if (strcmp("stackTrace", command) == 0) {
-        JSValue stack_trace = js_debugger_build_backtrace(ctx);
+        JSValue stack_trace = js_debugger_build_backtrace(ctx, state->cur_pc);
         js_transport_send_response(info, request, stack_trace);
     }
     else if (strcmp("scopes", command) == 0) {
@@ -298,8 +303,7 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
             int frame = reference >> 2;
             int scope = reference % 4;
 
-            if (frame >= js_debugger_stack_depth(ctx))
-                goto done;
+            assert(frame < js_debugger_stack_depth(ctx));
 
             if (scope == 0)
                 variable = JS_GetGlobalObject(ctx);
@@ -308,7 +312,7 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
             else if (scope == 2)
                 variable = js_debugger_closure_variables(ctx, frame);
             else
-                goto done;
+                assert(0);
 
             // need to dupe the variable, as it's used below as well.
             JS_SetPropertyUint32(ctx, state->variable_references, reference, JS_DupValue(ctx, variable));
@@ -400,13 +404,14 @@ JSValue js_debugger_file_breakpoints(JSContext *ctx, const char* path) {
     return path_data;    
 }
 
-static int js_process_debugger_messages(JSDebuggerInfo *info) {
+static int js_process_debugger_messages(JSDebuggerInfo *info, const uint8_t *cur_pc) {
     // continue processing messages until the continue message is received.
     JSContext *ctx = info->ctx;
     struct DebuggerSuspendedState state;
     state.variable_reference_count = js_debugger_stack_depth(ctx) << 2;
     state.variable_pointers = JS_NewObject(ctx);
     state.variable_references = JS_NewObject(ctx);
+    state.cur_pc = cur_pc;
     int ret = 0;
     char message_length_buf[10];
 
@@ -478,13 +483,13 @@ void js_debugger_exception(JSContext *ctx) {
     info->is_debugging = 1;
     js_send_stopped_event(info, "exception");
     info->is_paused = 1;
-    js_process_debugger_messages(info);
+    js_process_debugger_messages(info, NULL);
     info->is_debugging = 0;
 }
 
 // in thread check request/response of pending commands.
 // todo: background thread that reads the socket.
-void js_debugger_check(JSContext* ctx) {
+void js_debugger_check(JSContext* ctx, const uint8_t *cur_pc) {
     JSDebuggerInfo *info = js_debugger_info(ctx);
     if (info->is_debugging)
         return;
@@ -506,7 +511,26 @@ void js_debugger_check(JSContext* ctx) {
     if (info->transport_close == NULL)
         goto done;
 
-    int at_breakpoint = js_debugger_check_breakpoint(ctx, info->breakpoints_dirty_counter);
+
+    struct JSDebuggerLocation location;
+    int depth;
+
+    // perform stepping checks prior to the breakpoint check
+    // as those need to preempt breakpoint behavior to skip their last
+    // position, which may be a breakpoint.
+    if (info->stepping) {
+        // all step operations need to ignore their step location, as those
+        // may be on a breakpoint.
+        location = js_debugger_current_location(ctx, cur_pc);
+        depth = js_debugger_stack_depth(ctx);
+        if (info->step_depth == depth
+            && location.filename == info->step_over.filename
+            && location.line == info->step_over.line
+            && location.column == info->step_over.column)
+            goto done;
+    }
+
+    int at_breakpoint = js_debugger_check_breakpoint(ctx, info->breakpoints_dirty_counter, cur_pc);
     if (at_breakpoint) {
         // reaching a breakpoint resets any existing stepping.
         info->stepping = 0;
@@ -514,7 +538,14 @@ void js_debugger_check(JSContext* ctx) {
         js_send_stopped_event(info, "breakpoint");
     }
     else if (info->stepping) {
-        if (info->stepping == JS_DEBUGGER_STEP_IN) {
+        if (info->stepping == JS_DEBUGGER_STEP_CONTINUE) {
+            // continue needs to proceed over the existing statement (which may be multiple ops)
+            // once any change in location is detecting, turn off stepping.
+            // since reaching here after performing the check above, that is in fact the case.
+            // turn off stepping.
+            info->stepping = 0;
+        }
+        else if (info->stepping == JS_DEBUGGER_STEP_IN) {
             int depth = js_debugger_stack_depth(ctx);
             // break if the stack is deeper
             // or
@@ -522,7 +553,7 @@ void js_debugger_check(JSContext* ctx) {
             // or
             // break if the stack unwinds
             if (info->step_depth == depth) {
-                struct JSDebuggerLocation location = js_debugger_current_location(ctx);
+                struct JSDebuggerLocation location = js_debugger_current_location(ctx, cur_pc);
                 if (location.filename == info->step_over.filename
                     && location.line == info->step_over.line
                     && location.column == info->step_over.column)
@@ -540,8 +571,8 @@ void js_debugger_check(JSContext* ctx) {
             info->is_paused = 1;
             js_send_stopped_event(info, "stepOut");
         }
-        else {
-            struct JSDebuggerLocation location = js_debugger_current_location(ctx);
+        else if (info->stepping == JS_DEBUGGER_STEP) {
+            struct JSDebuggerLocation location = js_debugger_current_location(ctx, cur_pc);
             // to step over, need to make sure the location changes,
             // and that the location change isn't into a function call (deeper stack).
             if ((location.filename == info->step_over.filename
@@ -553,8 +584,15 @@ void js_debugger_check(JSContext* ctx) {
             info->is_paused = 1;
             js_send_stopped_event(info, "step");
         }
+        else {
+            // ???
+            info->stepping = 0;
+        }
     }
-    else {
+
+    // if not paused, we ought to peek at the stream
+    // and read it without blocking until all data is consumed.
+    if (!info->is_paused) {
         // only peek at the stream every now and then.
         if (info->peek_ticks++ < 10000 && !info->should_peek)
             goto done;
@@ -571,13 +609,12 @@ void js_debugger_check(JSContext* ctx) {
                 goto fail;
             if (peek == 0)
                 goto done;
-
-            if (!js_process_debugger_messages(info))
+            if (!js_process_debugger_messages(info, cur_pc))
                 goto fail;
         }
     }
 
-    if (js_process_debugger_messages(info))
+    if (js_process_debugger_messages(info, cur_pc))
         goto done;
 
     fail: 
@@ -632,7 +669,7 @@ void js_debugger_attach(
     info->breakpoints = JS_NewObject(ctx);
     info->is_paused = 1;
 
-    js_process_debugger_messages(info);
+    js_process_debugger_messages(info, NULL);
 }
 
 int js_debugger_is_transport_connected(JSContext *ctx) {
