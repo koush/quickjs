@@ -295,6 +295,8 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
         JS_ToUint32(ctx, &reference, reference_property);
         JS_FreeValue(ctx, reference_property);
 
+        JSValue properties = JS_NewArray(ctx);
+
         JSValue variable = JS_GetPropertyUint32(ctx, state->variable_references, reference);
 
         // if the variable reference was not found,
@@ -318,7 +320,6 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
             JS_SetPropertyUint32(ctx, state->variable_references, reference, JS_DupValue(ctx, variable));
         }
 
-        JSValue properties = JS_NewArray(ctx);
         JSPropertyEnum *tab_atom;
         uint32_t tab_atom_count;
 
