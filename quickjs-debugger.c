@@ -101,6 +101,7 @@ static JSValue js_get_scopes(JSContext *ctx, int frame) {
     JS_SetPropertyStr(ctx, local, "expensive", JS_FALSE);
     JS_SetPropertyUint32(ctx, scopes, scope_count++, local);
 
+
     JSValue closure = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, closure, "name", JS_NewString(ctx, "Closure"));
     JS_SetPropertyStr(ctx, closure, "reference", JS_NewInt32(ctx, (frame << 2) + 2));
@@ -304,8 +305,7 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
             int frame = reference >> 2;
             int scope = reference % 4;
 
-            if (frame > js_debugger_stack_depth(ctx))
-                goto done;
+            assert(frame < js_debugger_stack_depth(ctx));
 
             if (scope == 0)
                 variable = JS_GetGlobalObject(ctx);
@@ -314,7 +314,7 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
             else if (scope == 2)
                 variable = js_debugger_closure_variables(ctx, frame);
             else
-                goto done;
+                assert(0);
 
             // need to dupe the variable, as it's used below as well.
             JS_SetPropertyUint32(ctx, state->variable_references, reference, JS_DupValue(ctx, variable));
