@@ -1061,19 +1061,6 @@ JS_BOOL JS_IsNumber(JSValueConst v)
 #endif
 }
 
-JS_BOOL JS_IsArrayBuffer(JSValueConst v)
-{
-    JSObject *p;
-    if (JS_VALUE_GET_TAG(v) != JS_TAG_OBJECT)
-        return FALSE;
-    p = JS_VALUE_GET_OBJ(v);
-    if (p->class_id != JS_CLASS_ARRAY_BUFFER &&
-        p->class_id != JS_CLASS_SHARED_ARRAY_BUFFER) {
-        return FALSE;
-    }
-    return TRUE;
-}
-
 static void js_trigger_gc(JSRuntime *rt, size_t size)
 {
     BOOL force_gc;
