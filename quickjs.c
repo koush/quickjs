@@ -5923,7 +5923,14 @@ JSValue JS_Throw(JSContext *ctx, JSValue obj)
 {
     JS_FreeValue(ctx, ctx->current_exception);
     ctx->current_exception = obj;
-    ctx->exception_needs_backtrace = JS_IsError(ctx, obj);
+    if (JS_IsError(ctx, obj)) {
+        JSValue stack = JS_GetProperty(ctx, obj, JS_ATOM_stack);
+        ctx->exception_needs_backtrace = JS_IsUndefined(stack);
+        JS_FreeValue(ctx, stack);
+    }
+    else {
+        ctx->exception_needs_backtrace = FALSE;
+    }
     js_debugger_exception(ctx);
     return JS_EXCEPTION;
 }
