@@ -50655,6 +50655,8 @@ static JSValue js_debugger_find_closure_var(JSStackFrame *sf, JSClosureVar *cvar
                 return sf->var_buf[cvar->var_idx];
         }
 
+        if (!b->closure_var)
+            break;
         cvar = b->closure_var + cvar->var_idx;
     }
 
