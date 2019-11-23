@@ -50592,10 +50592,14 @@ static JSValue js_debugger_find_closure_var(JSStackFrame *sf, JSClosureVar *cvar
         JSFunctionBytecode *b = f->u.func.function_bytecode;
 
         if (cvar->is_local) {
-            if (cvar->is_arg)
+            if (cvar->is_arg) {
+                if (!sf->arg_buf)
+                    return JS_UNDEFINED;
                 return sf->arg_buf[cvar->var_idx];
-            else
+            }
+            else {
                 return sf->var_buf[cvar->var_idx];
+            }
         }
 
         if (!b->closure_var)
@@ -50672,8 +50676,8 @@ static JSValue js_debugger_eval(JSContext *ctx, JSValueConst this_obj, JSStackFr
     fd->arguments_allowed = b->arguments_allowed;
     fd->js_mode = js_mode;
     fd->func_name = JS_DupAtom(ctx, JS_ATOM__eval_);
-    if (b && b->vardefs && b->vardefs[b->arg_count + scope_idx].scope_next != scope_idx) {
-        if (add_closure_variables(ctx, fd, b, scope_idx))
+    if (b) {
+        if (add_closure_variables(ctx, fd, b, b->var_count ? 0 : -1))
             goto fail;
     }
     fd->module = NULL;
