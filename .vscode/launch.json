@@ -33,10 +33,10 @@
             "request": "launch",
             "program": "${workspaceFolder}/qjs-debug",
             "args": [
-                "bug.js"
+                "${workspaceFolder}/node/main.js"
             ],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/node",
             "environment": [
                 {
                     "name": "QUICKJS_DEBUG_ADDRESS",
@@ -66,5 +66,16 @@
             "externalConsole": true,
             "MIMode": "lldb",
             "preLaunchTask": "make qjs-debug",
+        },
+        {
+            "type": "quickjs",
+            "request": "launch",
+            "name": "Launch QuickJS",
+            "mode": "listen",
+            "port": 5555,
+            // "localRoot": "${workspaceFolder}/node",
+            "runtimeExecutable": "/Volumes/Dev/quackfill/quickjs/qjs-debug",
+            "program": "${workspaceFolder}/node/main.js"
         }
+    ]
 }
