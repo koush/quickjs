@@ -60,6 +60,14 @@ static int js_transport_write_value(JSDebuggerInfo *info, JSValue value) {
     int ret = 0;
     if (len)
         ret = js_transport_write_message_newline(info, str, len);
+    else {
+        JSValue e = JS_GetException(info->ctx);
+        const char *estr = JS_ToCString(info->ctx, e);
+        // todo: send this to vscode.
+        if (estr)
+            printf("%s\n", estr);
+        JS_FreeCString(info->ctx, estr);
+    }
     // else send error somewhere?
     JS_FreeCString(info->ctx, str);
     JS_FreeValue(info->ctx, stringified);
@@ -169,7 +177,15 @@ static void js_debugger_get_value(JSContext *ctx, JSValue var_val, JSValue var, 
         JS_SetPropertyStr(ctx, var, "indexedVariables", JS_NewInt32(ctx, len));
     }
     else {
-        JS_SetPropertyStr(ctx, var, value_property, JS_ToString(ctx, var_val));
+        JSValue var_val_string = JS_ToString(ctx, var_val);
+        if (JS_IsException(var_val_string)) {
+            JS_SetPropertyStr(ctx, var, value_property, JS_NewString(ctx, "<exception during toString>"));
+            JS_FreeValue(ctx, JS_GetException(ctx));
+            JS_FreeValue(ctx, var_val_string);
+        }
+        else {
+            JS_SetPropertyStr(ctx, var, value_property, var_val_string);
+        }
     }
 }
 
