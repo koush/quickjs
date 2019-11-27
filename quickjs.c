@@ -50924,7 +50924,12 @@ static JSValue js_debugger_eval(JSContext *ctx, JSValueConst this_obj, JSStackFr
     fd->js_mode = js_mode;
     fd->func_name = JS_DupAtom(ctx, JS_ATOM__eval_);
     if (b) {
-        if (add_closure_variables(ctx, fd, b, b->var_count ? 0 : -1))
+        int idx;
+        if (!b->var_count)
+            idx = -1;
+        else
+            idx = (b->vardefs && b->vardefs[b->arg_count + scope_idx].scope_next != scope_idx) ? 0 : -1;
+        if (add_closure_variables(ctx, fd, b, idx))
             goto fail;
     }
     fd->module = NULL;
