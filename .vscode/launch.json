@@ -17,9 +17,25 @@
             "request": "launch",
             "program": "${workspaceFolder}/qjs-debug",
             "args": [
-                "${workspaceFolder}/test.js"
+                "test.js"
+            ],
+            "cwd": "${workspaceFolder}",
+            "externalConsole": false,
+            "environment": [
+                {
+                    "name": "QUICKJS_DEBUG_ADDRESS",
+                    "value": "127.0.0.1:5555"
+                }
             ],
             "MIMode": "lldb"
         },
+        {
+            "type": "quickjs",
+            "request": "attach",
+            "name": "Attach QuickJS",
+            "localRoot": "${workspaceFolder}/",
+            "mode": "listen",
+            "port": 5555
+        }
     ]
 }
