@@ -86,10 +86,6 @@ JSDebuggerLocation js_debugger_current_location(JSContext *ctx, const uint8_t *c
 // calls back into js_debugger_file_breakpoints.
 int js_debugger_check_breakpoint(JSContext *ctx, uint32_t current_dirty, const uint8_t *cur_pc);
 
-// could be moved out if js_json_stringify is made public.
-// could also be implemented by constructing an eval call. clunky.
-JSValue js_debugger_json_stringify(JSContext *ctx, JSValueConst value);
-
 JSValue js_debugger_local_variables(JSContext *ctx, int stack_index);
 JSValue js_debugger_closure_variables(JSContext *ctx, int stack_index);
 
