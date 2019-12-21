@@ -5,77 +5,37 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(lldb) Attach",
-            "type": "cppdbg",
-            "request": "attach",
-            "program": "${workspaceFolder}/qjs-debug",
-            "processId": "${command:pickProcess}",
-            "MIMode": "lldb"
-        },
-        {
-            "name": "Launch",
-            "type": "cppdbg",
+            "type": "quickjs",
             "request": "launch",
-            "program": "${workspaceFolder}/qjs-debug",
-            "args": [
-                "bug.js"
-            ],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-
-            "externalConsole": true,
-            "MIMode": "lldb",
-            "preLaunchTask": "make qjs-debug",
+            "name": "Launch QuickJS",
+            "runtimeExecutable": "${workspaceFolder}/qjs-debug",
+            "program": "${workspaceFolder}/test.js"
         },
         {
-            "name": "Launch (connect)",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/qjs-debug",
-            "args": [
-                "${workspaceFolder}/node/main.js"
-            ],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/node",
-            "environment": [
-                {
-                    "name": "QUICKJS_DEBUG_ADDRESS",
-                    "value": "127.0.0.1:5555"
-                }
-            ],
-            "externalConsole": true,
-            "MIMode": "lldb",
-            "preLaunchTask": "make qjs-debug",
-        },
-        {
-            "name": "Launch (listen)",
+            "name": "(lldb) Launch",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/qjs-debug",
             "args": [
                 "test.js"
             ],
-            "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
+            "externalConsole": false,
             "environment": [
                 {
-                    "name": "QUICKJS_DEBUG_LISTEN_ADDRESS",
+                    "name": "QUICKJS_DEBUG_ADDRESS",
                     "value": "127.0.0.1:5555"
                 }
             ],
-            "externalConsole": true,
-            "MIMode": "lldb",
-            "preLaunchTask": "make qjs-debug",
+            "MIMode": "lldb"
         },
         {
             "type": "quickjs",
-            "request": "launch",
-            "name": "Launch QuickJS",
+            "request": "attach",
+            "name": "Attach QuickJS",
+            "localRoot": "${workspaceFolder}/",
             "mode": "listen",
-            "port": 5555,
-            // "localRoot": "${workspaceFolder}/node",
-            "runtimeExecutable": "/Volumes/Dev/quackfill/quickjs/qjs-debug",
-            "program": "${workspaceFolder}/node/main.js"
+            "port": 5555
         }
     ]
 }
