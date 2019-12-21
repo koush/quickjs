@@ -4387,7 +4387,6 @@ static JSValue JS_NewObjectFromShape(JSContext *ctx, JSShape *sh, JSClassID clas
     set_exotic:
         if (ctx->rt->class_array[class_id].exotic) {
             p->is_exotic = 1;
-            p->is_constructor = ctx->rt->class_array[class_id].exotic->construct != NULL;
         }
         break;
     }
@@ -17443,20 +17442,6 @@ static JSValue js_create_from_ctor(JSContext *ctx, JSValueConst ctor,
     return obj;
 }
 
-static JSValue js_call_exotic_constructor(JSContext *ctx,
-                                          JSValueConst func_obj,
-                                          JSValueConst new_target,
-                                          JSClass cl,
-                                          uint16_t class_id,
-                                          int argc, JSValue *argv, int flags) {
-    JSValue ret = JS_NewObjectClass(ctx, class_id);
-    int result = cl.exotic->construct(ctx, func_obj, ret, argc, argv);
-    if (result > 0)
-        return ret;
-    JS_FreeValue(ctx, ret);
-    return JS_ThrowTypeError(ctx, "constructor failed");
-}
-
 /* argv[] is modified if (flags & CALL_FLAG_COPY_ARGV) = 0. */
 static JSValue JS_CallConstructorInternal(JSContext *ctx,
                                           JSValueConst func_obj,
@@ -17465,7 +17450,6 @@ static JSValue JS_CallConstructorInternal(JSContext *ctx,
 {
     JSObject *p;
     JSFunctionBytecode *b;
-    JSClass cl;
 
     if (js_poll_interrupts(ctx))
         return JS_EXCEPTION;
@@ -17487,11 +17471,6 @@ static JSValue JS_CallConstructorInternal(JSContext *ctx,
             return js_proxy_call_constructor(ctx, func_obj, new_target, argc,
                                              (JSValueConst *)argv);
         default:
-            cl = ctx->rt->class_array[p->class_id];
-            if (cl.exotic && cl.exotic->construct) {
-                return js_call_exotic_constructor(ctx, func_obj, new_target, cl, p->class_id,
-                                            argc, argv, flags);
-            }
         not_a_function:
             return JS_ThrowTypeError(ctx, "not a function");
         }

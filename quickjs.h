@@ -430,8 +430,6 @@ typedef struct JSClassExoticMethods {
     /* return < 0 if exception or TRUE/FALSE */
     int (*set_property)(JSContext *ctx, JSValueConst obj, JSAtom atom,
                         JSValueConst value, JSValueConst receiver, int flags);
-    /* return <= 0 if exception */
-    int (*construct)(JSContext *ctx, JSValue func_obj, JSValueConst this_val, int argc, JSValueConst *argv);
 } JSClassExoticMethods;
 
 typedef void JSClassFinalizer(JSRuntime *rt, JSValue val);
