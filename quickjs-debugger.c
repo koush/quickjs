@@ -54,7 +54,7 @@ static int js_transport_write_message_newline(JSDebuggerInfo *info, const char* 
 }
 
 static int js_transport_write_value(JSDebuggerInfo *info, JSValue value) {
-    JSValue stringified = js_debugger_json_stringify(info->ctx, value);
+    JSValue stringified = JS_JSONStringify(info->ctx, value, JS_UNDEFINED, JS_UNDEFINED);
     size_t len;
     const char* str = JS_ToCStringLen(info->ctx, &len, stringified);
     int ret = 0;

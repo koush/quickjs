@@ -50598,15 +50598,6 @@ JSDebuggerLocation js_debugger_current_location(JSContext *ctx, const uint8_t *c
     return location;
 }
 
-JSValue js_debugger_json_stringify(JSContext *ctx, JSValueConst value) {
-    JSValueConst args[] = {
-        value,
-        JS_UNDEFINED,
-        JS_UNDEFINED,
-    };
-    return js_json_stringify(ctx, JS_UNDEFINED, 1, args);
-}
-
 JSDebuggerInfo *js_debugger_info(JSContext *ctx) {
     return &ctx->debugger_info;
 }
@@ -50835,6 +50826,9 @@ JSValue js_debugger_local_variables(JSContext *ctx, int stack_index) {
             else
                 var_val = sf->var_buf[i - b->arg_count];
 
+            if (JS_IsUninitialized(var_val))
+                continue;
+
             JSVarDef *vd = b->vardefs + i;
             JS_SetProperty(ctx, ret, vd->var_name, JS_DupValue(ctx, var_val));
         }
@@ -50844,33 +50838,6 @@ JSValue js_debugger_local_variables(JSContext *ctx, int stack_index) {
 
 done:
     return ret;
-}
-
-static JSValue js_debugger_find_closure_var(JSStackFrame *sf, JSClosureVar *cvar) {
-    while (sf && sf->prev_frame) {
-        sf = sf->prev_frame;
-        JSObject *f = JS_VALUE_GET_OBJ(sf->cur_func);
-        if (!f || !js_class_has_bytecode(f->class_id))
-            return JS_UNDEFINED;
-        JSFunctionBytecode *b = f->u.func.function_bytecode;
-
-        if (cvar->is_local) {
-            if (cvar->is_arg) {
-                if (!sf->arg_buf)
-                    return JS_UNDEFINED;
-                return sf->arg_buf[cvar->var_idx];
-            }
-            else {
-                return sf->var_buf[cvar->var_idx];
-            }
-        }
-
-        if (!b->closure_var)
-            break;
-        cvar = b->closure_var + cvar->var_idx;
-    }
-
-    return JS_UNDEFINED;
 }
 
 JSValue js_debugger_closure_variables(JSContext *ctx, int stack_index) {
@@ -50892,8 +50859,18 @@ JSValue js_debugger_closure_variables(JSContext *ctx, int stack_index) {
 
         for (uint32_t i = 0; i < b->closure_var_count; i++) {
             JSClosureVar *cvar = b->closure_var + i;
-            JSValue var_val = JS_DupValue(ctx, js_debugger_find_closure_var(sf, cvar));
-            JS_SetProperty(ctx, ret, cvar->var_name, var_val);
+            JSValue var_val;
+            JSVarRef *var_ref = NULL;
+            if (f->u.func.var_refs)
+                var_ref = f->u.func.var_refs[i];
+            if (!var_ref || !var_ref->pvalue)
+                continue;
+            var_val = *var_ref->pvalue;
+
+            if (JS_IsUninitialized(var_val))
+                continue;
+
+            JS_SetProperty(ctx, ret, cvar->var_name, JS_DupValue(ctx, var_val));
         }
 
         break;
