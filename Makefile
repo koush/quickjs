@@ -51,7 +51,10 @@ prefix=/usr/local
 OBJDIR=.obj
 
 ifdef CONFIG_WIN32
-  CROSS_PREFIX=i686-w64-mingw32-
+  CROSS_PREFIX=x86_64-w64-mingw32-
+  ifdef CONFIG_M32
+    CROSS_PREFIX=i686-w64-mingw32-
+  endif
   EXE=.exe
 else
   CROSS_PREFIX=
@@ -168,6 +171,8 @@ QJS_OBJS=$(OBJDIR)/qjs.o $(OBJDIR)/repl.o $(OBJDIR)/qjscalc.o $(QJS_LIB_OBJS)
 LIBS=-lm
 ifndef CONFIG_WIN32
 LIBS+=-ldl
+else
+LIBS+=-lws2_32
 endif
 
 $(OBJDIR):
