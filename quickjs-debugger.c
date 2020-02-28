@@ -1,11 +1,16 @@
 #include "quickjs-debugger.h"
 #include <time.h>
 #include <math.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <ctype.h>
 
 typedef struct DebuggerSuspendedState {
     uint32_t variable_reference_count;
@@ -373,6 +378,28 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
     JS_FreeValue(ctx, request);
 }
 
+static char *js_debuger_file_normalize(JSContext *ctx, const char *path)
+{
+    if (!path)
+        return NULL;
+
+    char *copy = js_strdup(ctx, path);
+    if (NULL == copy)
+        return NULL;
+    char *ptr = copy;
+    while (*path) {
+        if (*path == '\\') {
+            *ptr++ = '/';
+            while (*path == '\\')
+                path++;
+        } else
+            *ptr++ = tolower(*path++);
+    }
+
+    *ptr = 0;
+    return copy;
+}
+
 static void js_process_breakpoints(JSDebuggerInfo *info, JSValue message) {
     JSContext *ctx = info->ctx;
 
@@ -381,14 +408,16 @@ static void js_process_breakpoints(JSDebuggerInfo *info, JSValue message) {
 
     JSValue path_property = JS_GetPropertyStr(ctx, message, "path");
     const char *path = JS_ToCString(ctx, path_property);
-    JSValue path_data = JS_GetPropertyStr(ctx, info->breakpoints, path);
+    char *_path = js_debuger_file_normalize(ctx, path);
+    JSValue path_data = JS_GetPropertyStr(ctx, info->breakpoints, _path);
 
     if (!JS_IsUndefined(path_data))
         JS_FreeValue(ctx, path_data);
     // use an object to store the breakpoints as a sparse array, basically.
     // this will get resolved into a pc array mirror when its detected as dirty.
     path_data = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, info->breakpoints, path, path_data);
+    JS_SetPropertyStr(ctx, info->breakpoints, _path, path_data);
+    js_free(ctx, _path);
     JS_FreeCString(ctx, path);
     JS_FreeValue(ctx, path_property);
 
@@ -401,7 +430,9 @@ static void js_process_breakpoints(JSDebuggerInfo *info, JSValue message) {
 
 JSValue js_debugger_file_breakpoints(JSContext *ctx, const char* path) {
     JSDebuggerInfo *info = js_debugger_info(ctx);
-    JSValue path_data = JS_GetPropertyStr(ctx, info->breakpoints, path);
+    char *_path = js_debuger_file_normalize(ctx, path);
+    JSValue path_data = JS_GetPropertyStr(ctx, info->breakpoints, _path);
+    js_free(ctx, _path);
     return path_data;    
 }
 
