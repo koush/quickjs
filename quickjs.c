@@ -41,7 +41,9 @@
 #include "cutils.h"
 #include "list.h"
 #include "quickjs.h"
+#ifdef QUICKJS_WITH_DEBUGGER
 #include "quickjs-debugger.h"
+#endif
 #include "libregexp.h"
 #ifdef CONFIG_BIGNUM
 #include "libbf.h"
@@ -445,7 +447,9 @@ struct JSContext {
     int interrupt_counter;
     BOOL is_error_property_enabled;
 
+#ifdef QUICKJS_WITH_DEBUGGER
     JSDebuggerInfo debugger_info;
+#endif
 
     struct list_head loaded_modules; /* list of JSModuleDef.link */
 
@@ -606,7 +610,9 @@ typedef struct JSFunctionBytecode {
         uint8_t *pc2line_buf;
         char *source;
     } debug;
+#ifdef QUICKJS_WITH_DEBUGGER
     struct JSDebuggerFunctionInfo debugger;
+#endif
 } JSFunctionBytecode;
 
 typedef struct JSBoundFunction {
@@ -2290,7 +2296,9 @@ void JS_FreeContext(JSContext *ctx)
     }
 #endif
 
+#ifdef QUICKJS_WITH_DEBUGGER
     js_debugger_free(ctx, &ctx->debugger_info);
+#endif
 
     js_free_modules(ctx, JS_FREE_MODULE_ALL);
 
@@ -6278,7 +6286,9 @@ JSValue JS_Throw(JSContext *ctx, JSValue obj)
     JSRuntime *rt = ctx->rt;
     JS_FreeValue(ctx, rt->current_exception);
     rt->current_exception = obj;
+#ifdef QUICKJS_WITH_DEBUGGER
     js_debugger_exception(ctx);
+#endif
     return JS_EXCEPTION;
 }
 
@@ -16017,6 +16027,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
 #include "quickjs-opcode.h"
         [ OP_COUNT ... 255 ] = &&case_default
     };
+#ifdef QUICKJS_WITH_DEBUGGER
     static const void * const debugger_dispatch_table[256] = {
 #define DEF(id, size, n_pop, n_push, f) && case_debugger_OP_ ## id,
 #if SHORT_OPCODES
@@ -16029,12 +16040,18 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
     };
 #define SWITCH(pc)      goto *active_dispatch_table[opcode = *pc++];
 #define CASE(op)        case_debugger_ ## op: js_debugger_check(ctx, pc); case_ ## op
+#else
+#define SWITCH(pc)      goto *dispatch_table[opcode = *pc++];
+#define CASE(op)        case_ ## op
+#endif
 #define DEFAULT         case_default
 #define BREAK           SWITCH(pc)
 #endif
 
+#ifdef QUICKJS_WITH_DEBUGGER
     const void * const * active_dispatch_table = caller_ctx->debugger_info.transport_close
         ? debugger_dispatch_table : dispatch_table;
+#endif
 
     if (js_poll_interrupts(caller_ctx))
         return JS_EXCEPTION;
@@ -53331,7 +53348,7 @@ void JS_AddIntrinsicTypedArrays(JSContext *ctx)
     JS_AddIntrinsicAtomics(ctx);
 #endif
 }
-
+#ifdef QUICKJS_WITH_DEBUGGER
 JSDebuggerLocation js_debugger_current_location(JSContext *ctx, const uint8_t *cur_pc) {
     JSDebuggerLocation location;
     location.filename = 0;
@@ -53733,3 +53750,5 @@ JSValue js_debugger_evaluate(JSContext *ctx, int stack_index, JSValue expression
     }
     return JS_UNDEFINED;
 }
+#endif
+

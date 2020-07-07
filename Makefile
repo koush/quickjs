@@ -103,6 +103,10 @@ ifdef CONFIG_WIN32
 DEFINES+=-D__USE_MINGW_ANSI_STDIO # for standard snprintf behavior
 endif
 
+ifdef QUICKJS_WITH_DEBUGGER
+DEFINES+=-DQUICKJS_WITH_DEBUGGER
+endif
+
 CFLAGS+=$(DEFINES)
 CFLAGS_DEBUG=$(CFLAGS) -O0
 CFLAGS_SMALL=$(CFLAGS) -Os
@@ -164,12 +168,13 @@ all: $(OBJDIR) $(OBJDIR)/quickjs.check.o $(OBJDIR)/qjs.check.o $(PROGS)
 
 QJS_LIB_OBJS=$(OBJDIR)/quickjs.o $(OBJDIR)/libregexp.o $(OBJDIR)/libunicode.o $(OBJDIR)/cutils.o $(OBJDIR)/quickjs-libc.o
 
-# debugger
+ifdef QUICKJS_WITH_DEBUGGER
 QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger.o
 ifndef CONFIG_WIN32
 QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger-transport-unix.o
 else
 QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger-transport-win.o
+endif
 endif
 
 QJS_OBJS=$(OBJDIR)/qjs.o $(OBJDIR)/repl.o $(QJS_LIB_OBJS)
