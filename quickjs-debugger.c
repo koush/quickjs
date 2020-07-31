@@ -117,6 +117,12 @@ static JSValue js_get_scopes(JSContext *ctx, int frame) {
     return scopes;
 }
 
+static inline JS_BOOL JS_IsInteger(JSValueConst v)
+{
+    int tag = JS_VALUE_GET_TAG(v);
+    return tag == JS_TAG_INT || tag == JS_TAG_BIG_INT;
+}
+
 static void js_debugger_get_variable_type(JSContext *ctx,
         struct DebuggerSuspendedState *state,
         JSValue var, JSValue var_val) {
