@@ -26,6 +26,12 @@ try { std.loadScript("test_assert.js"); } catch(e) {}
 function test_printf()
 {
     assert(std.sprintf("a=%d s=%s", 123, "abc"), "a=123 s=abc");
+    assert(std.sprintf("%010d", 123), "0000000123");
+    assert(std.sprintf("%x", -2), "fffffffe");
+    assert(std.sprintf("%lx", -2), "fffffffffffffffe");
+    assert(std.sprintf("%10.1f", 2.1), "       2.1");
+    assert(std.sprintf("%*.*f", 10, 2, -2.13), "     -2.13");
+    assert(std.sprintf("%#lx", 0x7fffffffffffffffn), "0x7fffffffffffffff");
 }
 
 function test_file1()
@@ -106,6 +112,9 @@ function test_popen()
     f.puts(content);
     f.close();
 
+    /* test loadFile */
+    assert(std.loadFile(fname), content);
+    
     /* execute the 'cat' shell command */
     f = std.popen("cat " + fname, "r");
     str = f.readAsString();
@@ -114,6 +123,20 @@ function test_popen()
     assert(str, content);
 
     os.remove(fname);
+}
+
+function test_ext_json()
+{
+    var expected, input, obj;
+    expected = '{"x":false,"y":true,"z2":null,"a":[1,8,160],"s":"str"}';
+    input = `{ "x":false, /*comments are allowed */
+               "y":true,  // also a comment
+               z2:null, // unquoted property names
+               "a":[+1,0o10,0xa0,], // plus prefix, octal, hexadecimal
+               "s":"str",} // trailing comma in objects and arrays
+            `;
+    obj = std.parseExtJSON(input);
+    assert(JSON.stringify(obj), expected);
 }
 
 function test_os()
@@ -142,12 +165,18 @@ function test_os()
         buf[i] = i;
     assert(os.write(fd, buf.buffer, 0, buf.length) === buf.length);
 
-    assert(os.seek(fd, 0, os.SEEK_SET) === 0);
+    assert(os.seek(fd, 0, std.SEEK_SET) === 0);
     buf2 = new Uint8Array(buf.length);
     assert(os.read(fd, buf2.buffer, 0, buf2.length) === buf2.length);
     
     for(i = 0; i < buf.length; i++)
         assert(buf[i] == buf2[i]);
+    
+    if (typeof BigInt !== "undefined") {
+        assert(os.seek(fd, BigInt(6), std.SEEK_SET), BigInt(6));
+        assert(os.read(fd, buf2.buffer, 0, 1) === 1);
+        assert(buf[6] == buf2[0]);
+    }
     
     assert(os.close(fd) === 0);
 
@@ -205,7 +234,11 @@ function test_os_exec()
     assert(ret, 1);
     
     fds = os.pipe();
-    pid = os.exec(["echo", "hello"], { stdout: fds[1], block: false } );
+    pid = os.exec(["sh", "-c", "echo $FOO"], {
+        stdout: fds[1],
+        block: false,
+        env: { FOO: "hello" },
+    } );
     assert(pid >= 0);
     os.close(fds[1]); /* close the write end (as it is only in the child)  */
     f = std.fdopen(fds[0], "r");
@@ -245,3 +278,4 @@ test_popen();
 test_os();
 test_os_exec();
 test_timer();
+test_ext_json();
