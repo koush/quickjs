@@ -2290,8 +2290,6 @@ void JS_FreeContext(JSContext *ctx)
     }
 #endif
 
-    js_debugger_free(ctx, &ctx->debugger_info);
-
     js_free_modules(ctx, JS_FREE_MODULE_ALL);
 
     JS_FreeValue(ctx, ctx->global_obj);
