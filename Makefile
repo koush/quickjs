@@ -50,6 +50,8 @@ prefix=/usr/local
 # include the code for BigInt/BigFloat/BigDecimal and math mode
 CONFIG_BIGNUM=y
 
+#CONFIG_STACK_CHECK=y
+
 OBJDIR=.obj
 
 ifdef CONFIG_WIN32
@@ -98,6 +100,9 @@ endif
 DEFINES:=-D_GNU_SOURCE -DCONFIG_VERSION=\"$(shell cat VERSION)\"
 ifdef CONFIG_BIGNUM
 DEFINES+=-DCONFIG_BIGNUM
+endif
+ifdef CONFIG_STACK_CHECK
+DEFINES+=-DCONFIG_STACK_CHECK
 endif
 ifdef CONFIG_WIN32
 DEFINES+=-D__USE_MINGW_ANSI_STDIO # for standard snprintf behavior
