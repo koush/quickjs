@@ -57,7 +57,7 @@ typedef sig_t sighandler_t;
 
 #endif
 
-#if !defined(_WIN32) && !defined(__ANDROID__)
+#if !defined(_WIN32) && !defined(CONFIG_DISABLE_WORKER)
 /* enable the os.Worker API. IT relies on POSIX threads */
 #define USE_WORKER
 #endif
