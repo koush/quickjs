@@ -198,20 +198,16 @@ static int js_debugger_get_frame(JSContext *ctx, JSValue args) {
     return frame;
 }
 
-static void js_send_stopped_event_ctx(JSContext *calling_ctx, JSDebuggerInfo *info, const char *reason) {
+static void js_send_stopped_event(JSDebuggerInfo *info, const char *reason) {
     JSContext *ctx = info->debugging_ctx;
 
     JSValue event = JS_NewObject(ctx);
     // better thread id?
     JS_SetPropertyStr(ctx, event, "type", JS_NewString(ctx, "StoppedEvent"));
     JS_SetPropertyStr(ctx, event, "reason", JS_NewString(ctx, reason));
-    int64_t id = (int64_t)calling_ctx;
+    int64_t id = (int64_t)info->ctx;
     JS_SetPropertyStr(ctx, event, "thread", JS_NewInt64(ctx, id));
     js_transport_send_event(info, event);
-}
-
-static void js_send_stopped_event(JSDebuggerInfo *info, const char *reason) {
-    js_send_stopped_event_ctx(info->ctx, info, reason);
 }
 
 static void js_free_prop_enum(JSContext *ctx, JSPropertyEnum *tab, uint32_t len)
@@ -711,12 +707,17 @@ void js_debugger_attach(
     info->transport_close = transport_close;
     info->transport_udata = udata;
 
-    js_send_stopped_event_ctx(ctx, info, "entry");
+    JSContext *original_ctx = info->ctx;
+    info->ctx = ctx;
+
+    js_send_stopped_event(info, "entry");
 
     info->breakpoints = JS_NewObject(info->debugging_ctx);
     info->is_paused = 1;
 
     js_process_debugger_messages(info, NULL);
+
+    info->ctx = original_ctx;
 }
 
 int js_debugger_is_transport_connected(JSRuntime *rt) {
