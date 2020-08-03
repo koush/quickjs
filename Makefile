@@ -50,7 +50,7 @@ prefix=/usr/local
 # include the code for BigInt/BigFloat/BigDecimal and math mode
 CONFIG_BIGNUM=y
 
-#CONFIG_STACK_CHECK=y
+CONFIG_DISABLE_STACK_CHECK=y
 CONFIG_DISABLE_WORKER=y
 
 OBJDIR=.obj
