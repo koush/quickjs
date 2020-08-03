@@ -304,6 +304,8 @@ struct JSRuntime {
     uint32_t operator_count;
 #endif
     void *user_opaque;
+
+    JSDebuggerInfo debugger_info;
 };
 
 struct JSClass {
@@ -444,8 +446,6 @@ struct JSContext {
     /* when the counter reaches zero, JSRutime.interrupt_handler is called */
     int interrupt_counter;
     BOOL is_error_property_enabled;
-
-    JSDebuggerInfo debugger_info;
 
     struct list_head loaded_modules; /* list of JSModuleDef.link */
 
@@ -1910,6 +1910,8 @@ void JS_SetRuntimeInfo(JSRuntime *rt, const char *s)
 
 void JS_FreeRuntime(JSRuntime *rt)
 {
+    js_debugger_free(rt, &rt->debugger_info);
+
     struct list_head *el, *el1;
     int i;
 
@@ -2128,6 +2130,9 @@ JSContext *JS_NewContextRaw(JSRuntime *rt)
     init_list_head(&ctx->loaded_modules);
 
     JS_AddIntrinsicBasicObjects(ctx);
+
+    js_debugger_new_context(ctx);
+
     return ctx;
 }
 
@@ -2290,7 +2295,7 @@ void JS_FreeContext(JSContext *ctx)
     }
 #endif
 
-    js_debugger_free(ctx, &ctx->debugger_info);
+    js_debugger_free_context(ctx);
 
     js_free_modules(ctx, JS_FREE_MODULE_ALL);
 
@@ -16048,7 +16053,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
 #define BREAK           SWITCH(pc)
 #endif
 
-    const void * const * active_dispatch_table = caller_ctx->debugger_info.transport_close
+    const void * const * active_dispatch_table = caller_ctx->rt->debugger_info.transport_close
         ? debugger_dispatch_table : dispatch_table;
 
     if (js_poll_interrupts(caller_ctx))
@@ -53374,8 +53379,8 @@ JSDebuggerLocation js_debugger_current_location(JSContext *ctx, const uint8_t *c
     return location;
 }
 
-JSDebuggerInfo *js_debugger_info(JSContext *ctx) {
-    return &ctx->debugger_info;
+JSDebuggerInfo *js_debugger_info(JSRuntime *rt) {
+    return &rt->debugger_info;
 }
 
 uint32_t js_debugger_stack_depth(JSContext *ctx) {

@@ -9,6 +9,7 @@
             "request": "launch",
             "name": "Launch QuickJS",
             "runtimeExecutable": "${workspaceFolder}/qjs-debug",
+            // "trace": true,
             "program": "${workspaceFolder}/test.js"
         },
         {
