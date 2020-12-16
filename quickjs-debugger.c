@@ -680,6 +680,7 @@ void js_debugger_free(JSRuntime *rt, JSDebuggerInfo *info) {
     if (info->message_buffer) {
         js_free_rt(rt, info->message_buffer);
         info->message_buffer = NULL;
+        info->message_buffer_length = 0;
     }
 
     JS_FreeValue(info->debugging_ctx, info->breakpoints);
