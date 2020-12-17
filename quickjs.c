@@ -16008,7 +16008,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
 
 #if !DIRECT_DISPATCH
 #define SWITCH(pc)      switch (opcode = *pc++)
-#define CASE(op)        case op
+#define CASE(op)        case op: if (caller_ctx->rt->debugger_info.transport_close) js_debugger_check(ctx, pc); stub_ ## op
 #define DEFAULT         default
 #define BREAK           break
 #else
@@ -16036,10 +16036,10 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
 #define CASE(op)        case_debugger_ ## op: js_debugger_check(ctx, pc); case_ ## op
 #define DEFAULT         case_default
 #define BREAK           SWITCH(pc)
-#endif
 
     const void * const * active_dispatch_table = caller_ctx->rt->debugger_info.transport_close
         ? debugger_dispatch_table : dispatch_table;
+#endif
 
     if (js_poll_interrupts(caller_ctx))
         return JS_EXCEPTION;
