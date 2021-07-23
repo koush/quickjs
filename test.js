@@ -37,6 +37,7 @@ function bar() {
         throw new Error('whoops');
     }
     catch (e) {
+        console.log('caught a whoops');
     }
 }
 
@@ -51,4 +52,6 @@ class Blub {
 }
 
 var blub = new Blub();
+blub.jib();
+// note that a breakpoint here will not work, tail call breakpoints fail?
 blub.jib();
