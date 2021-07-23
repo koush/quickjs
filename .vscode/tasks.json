@@ -7,6 +7,9 @@
             "label": "make qjs-debug",
             "type": "shell",
             "command": "make -j32 qjs-debug",
+            "windows": {
+                "command": "make -j32 qjs-debug.exe",
+            },
             "group": {
                 "kind": "build",
                 "isDefault": true
