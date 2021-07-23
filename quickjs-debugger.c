@@ -439,6 +439,7 @@ static int js_process_debugger_messages(JSDebuggerInfo *info, const uint8_t *cur
             if (info->message_buffer) {
                 js_free(ctx, info->message_buffer);
                 info->message_buffer = NULL;
+                info->message_buffer_length = 0;
             }
 
             // extra for null termination (debugger inspect, etc)
