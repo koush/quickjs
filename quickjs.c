@@ -522,6 +522,7 @@ typedef struct JSClosureVar {
 
 #define ARG_SCOPE_INDEX 1
 #define ARG_SCOPE_END (-2)
+#define DEBUG_SCOP_INDEX (-3)
 
 typedef struct JSVarScope {
     int parent;  /* index into fd->scopes of the enclosing scope */
@@ -30403,13 +30404,23 @@ static __exception int add_closure_variables(JSContext *ctx, JSFunctionDef *s,
     if (!s->closure_var)
         return -1;
     /* Add lexical variables in scope at the point of evaluation */
-    for (i = scope_idx; i >= 0;) {
-        vd = &b->vardefs[b->arg_count + i];
-        if (vd->scope_level > 0) {
-            JSClosureVar *cv = &s->closure_var[s->closure_var_count++];
-            set_closure_from_var(ctx, cv, vd, i);
+    if(scope_idx == DEBUG_SCOP_INDEX) {
+        for (i = 0; i < b->var_count; i++) {
+            vd = &b->vardefs[b->arg_count + i];
+            if (vd->scope_level > 0) {
+                JSClosureVar *cv = &s->closure_var[s->closure_var_count++];
+                set_closure_from_var(ctx, cv, vd, i);
+            }
         }
-        i = vd->scope_next;
+    } else {
+        for (i = scope_idx; i >= 0;) {
+            vd = &b->vardefs[b->arg_count + i];
+            if (vd->scope_level > 0) {
+                JSClosureVar *cv = &s->closure_var[s->closure_var_count++];
+                set_closure_from_var(ctx, cv, vd, i);
+            }
+            i = vd->scope_next;
+        }
     }
     is_arg_scope = (i == ARG_SCOPE_END);
     if (!is_arg_scope) {
@@ -54418,7 +54429,8 @@ static JSValue js_debugger_eval(JSContext *ctx, JSValueConst this_obj, JSStackFr
         if (!b->var_count)
             idx = -1;
         else
-            idx = (b->vardefs && b->vardefs[b->arg_count + scope_idx].scope_next != scope_idx) ? 0 : -1;
+            // use DEBUG_SCOP_INDEX to add all lexical variables to debug eval closure.
+            idx = DEBUG_SCOP_INDEX;
         if (add_closure_variables(ctx, fd, b, idx))
             goto fail;
     }
