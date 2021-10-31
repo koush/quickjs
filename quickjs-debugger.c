@@ -464,7 +464,8 @@ static int js_process_debugger_messages(JSDebuggerInfo *info, const uint8_t *cur
         info->message_buffer[message_length] = '\0';
 
         JSValue message = JS_ParseJSON(ctx, info->message_buffer, message_length, "<debugger>");
-        const char *type = JS_ToCString(ctx, JS_GetPropertyStr(ctx, message, "type"));
+        JSValue vtype = JS_GetPropertyStr(ctx, message, "type");
+        const char *type = JS_ToCString(ctx, vtype);
         if (strcmp("request", type) == 0) {
             js_process_request(info, &state, JS_GetPropertyStr(ctx, message, "request"));
             // done_processing = 1;
@@ -482,6 +483,7 @@ static int js_process_debugger_messages(JSDebuggerInfo *info, const uint8_t *cur
         }
 
         JS_FreeCString(ctx, type);
+        JS_FreeValue(ctx, vtype);
         JS_FreeValue(ctx, message);
     }
     while (info->is_paused);
