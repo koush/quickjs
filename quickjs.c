@@ -30869,7 +30869,8 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
     next: ;
     }
 
-    line_num = 0; /* avoid warning */
+    /* init with function start line to ensure generate a valid last line for one-line function */
+    line_num = s->line_num;
     for (pos = 0; pos < bc_len; pos = pos_next) {
         op = bc_buf[pos];
         len = opcode_info[op].size;
